@@ -43,3 +43,13 @@ fn ensure_drop() {
     drop(a);
     assert_eq!(v.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn ensure_drop_arc() {
+    let v = Arc::new(AtomicUsize::new(0));
+    let a = Arc::new(Canary(v.clone()));
+    let a = Atom::new(a);
+    assert_eq!(v.load(Ordering::SeqCst), 0);
+    drop(a);
+    assert_eq!(v.load(Ordering::SeqCst), 1);
+}

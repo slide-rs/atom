@@ -1,5 +1,6 @@
 
 use std::sync::atomic::AtomicPtr;
+use std::sync::Arc;
 use std::mem;
 use std::ptr;
 use std::marker::PhantomData;
@@ -95,6 +96,18 @@ impl<T> IntoRawPtr<T> for Box<T> {
 
 impl<T> FromRawPtr<T> for Box<T> {
     unsafe fn from_raw(ptr: *mut T) -> Box<T> {
+        mem::transmute(ptr)
+    }
+}
+
+impl<T> IntoRawPtr<T> for Arc<T> {
+    unsafe fn into_raw(self) -> *mut T {
+        mem::transmute(self)
+    }
+}
+
+impl<T> FromRawPtr<T> for Arc<T> {
+    unsafe fn from_raw(ptr: *mut T) -> Arc<T> {
         mem::transmute(ptr)
     }
 }
