@@ -23,8 +23,8 @@ fn take() {
 #[test]
 fn set_if_none() {
     let a = Atom::empty();
-    assert_eq!(a.set_if_none(Box::new(7u8), Ordering::Relaxed), Ok(()));
-    assert_eq!(a.set_if_none(Box::new(8u8), Ordering::Relaxed), Err(Box::new(8u8)));
+    assert_eq!(a.set_if_none(Box::new(7u8), Ordering::Relaxed), None);
+    assert_eq!(a.set_if_none(Box::new(8u8), Ordering::Relaxed), Some(Box::new(8u8)));
 }
 
 struct Canary(Arc<AtomicUsize>);
@@ -75,6 +75,23 @@ fn ensure_send() {
 fn get() {
     let atom = Arc::new(AtomSetOnce::empty());
     assert_eq!(atom.get(Ordering::Relaxed), None);
-    assert_eq!(atom.set_if_none(Box::new(8u8), Ordering::SeqCst), Ok(()));
+    assert_eq!(atom.set_if_none(Box::new(8u8), Ordering::SeqCst), None);
     assert_eq!(atom.get(Ordering::Relaxed), Some(&8u8));
+}
+
+#[test]
+fn get_arc() {
+    let atom = Arc::new(AtomSetOnce::empty());
+    assert_eq!(atom.get(Ordering::Relaxed), None);
+    assert_eq!(atom.set_if_none(Arc::new(8u8), Ordering::SeqCst), None);
+    assert_eq!(atom.get(Ordering::Relaxed), Some(&8u8));
+
+    let v = Arc::new(AtomicUsize::new(0));
+    let atom = Arc::new(AtomSetOnce::empty());
+    atom.get(Ordering::Relaxed);
+    atom.set_if_none(Arc::new(Canary(v.clone())), Ordering::SeqCst);
+    atom.get(Ordering::Relaxed);
+    drop(atom);
+
+    assert_eq!(v.load(Ordering::SeqCst), 1);
 }

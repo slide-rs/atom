@@ -8,8 +8,6 @@ use std::marker::PhantomData;
 
 pub use std::sync::atomic::Ordering;
 
-unsafe impl<T, P> Send for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {}
-
 /// An Atom wraps an AtomicPtr, it allows for safe mutation of an atomic
 /// into common Rust Types.
 pub struct Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
@@ -60,16 +58,16 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
     }
 
     /// This will do a `CAS` setting the value only if it is NULL
-    /// this will return `OK(())` if the value was written,
-    /// otherwise a `Err(P)` will be returned, where the value was
+    /// this will return `None` if the value was written,
+    /// otherwise a `Some(v)` will be returned, where the value was
     /// the same value that you passed into this function
-    pub fn set_if_none(&self, v: P, order: Ordering) -> Result<(), P> {
+    pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
         let new = unsafe { v.into_raw() };
         let old = self.inner.compare_and_swap(ptr::null_mut(), new, order);
         if !old.is_null() {
-            Err(unsafe { FromRawPtr::from_raw(new) })
+            Some(unsafe { FromRawPtr::from_raw(new) })
         } else {
-            Ok(())
+            None
         }
     }
 }
@@ -81,6 +79,8 @@ impl<T, P> Drop for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T>  {
         self.take(Ordering::SeqCst);
     }
 }
+
+unsafe impl<T, P> Send for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {}
 
 /// Convert from into a raw pointer
 pub trait IntoRawPtr<T> {
@@ -149,7 +149,7 @@ impl<T, P> AtomSetOnce<T, P>
     /// this will return `OK(())` if the value was written,
     /// otherwise a `Err(P)` will be returned, where the value was
     /// the same value that you passed into this function
-    pub fn set_if_none(&self, v: P, order: Ordering) -> Result<(), P> {
+    pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
         self.inner.set_if_none(v, order)
     }
 
