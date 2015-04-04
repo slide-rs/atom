@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::mem;
 use std::ptr;
 use std::ops::Deref;
+use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
 pub use std::sync::atomic::Ordering;
@@ -15,6 +16,11 @@ pub struct Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
     data: PhantomData<P>
 }
 
+impl<T, P> Debug for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "atom({:?})", self.inner.load(Ordering::Relaxed))
+    }
+}
 
 impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
     /// Create a empty Atom
@@ -124,10 +130,20 @@ unsafe fn copy_lifetime<'a, S: ?Sized, T: ?Sized + 'a>(_ptr: &'a S,
 }
 
 
-/// This is a restricted version of the Atom. It allows for onlu
-/// `set_if_none` to be called. Since the value cannot be modified via `take`
-/// or via `swap` we know that as long as the `AtomSetOnce` is alive so is
-/// its data. This allows for traits such as `get`
+/// Transforms lifetime of the second pointer to match the first.
+#[inline]
+unsafe fn copy_mut_lifetime<'a, S: ?Sized, T: ?Sized + 'a>(_ptr: &'a S, 
+                                                    ptr: &mut T) -> &'a mut T {
+    mem::transmute(ptr)
+}
+
+
+/// This is a restricted version of the Atom. It allows for only
+/// `set_if_none` to be called.
+///
+/// `swap` and `take` can be used only with a mutable reference. Meaning
+/// that AtomSetOnce is not usable as a 
+#[derive(Debug)]
 pub struct AtomSetOnce<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
     inner: Atom<T, P>
 }
@@ -153,6 +169,12 @@ impl<T, P> AtomSetOnce<T, P>
         self.inner.set_if_none(v, order)
     }
 
+    /// Convert an AtomSetOnce into an Atom
+    pub fn into_atom(self) -> Atom<T, P> { self.inner }
+
+    /// Allow access to the atom if exclusive access is granted
+    pub fn atom(&mut self) -> &mut Atom<T, P> { &mut self.inner }
+
     /// If the Atom is set, get the value
     pub fn get<'a>(&'a self, order: Ordering) -> Option<&'a T> {
         let ptr = self.inner.inner.load(order);
@@ -163,10 +185,30 @@ impl<T, P> AtomSetOnce<T, P>
                 // This is safe since ptr cannot be changed once it is set
                 // which means that this is now a Arc or a Box.
                 let v: P = FromRawPtr::from_raw(ptr);
-                let out = copy_lifetime(self, v.deref());
+                let out = copy_lifetime(self, &*v);
                 mem::forget(v);
                 Some(out)
             }
         }
     }
 }
+
+impl<T> AtomSetOnce<T, Box<T>> {
+    /// If the Atom is set, get the value
+    pub fn get_mut<'a>(&'a mut self, order: Ordering) -> Option<&'a mut T> {
+        let ptr = self.inner.inner.load(order);
+        if ptr.is_null() {
+            None
+        } else {
+            unsafe {
+                // This is safe since ptr cannot be changed once it is set
+                // which means that this is now a Arc or a Box.
+                let mut v: Box<T> = FromRawPtr::from_raw(ptr);
+                let out = copy_mut_lifetime(self, &mut *v);
+                mem::forget(v);
+                Some(out)
+            }
+        }
+    }
+}
+
