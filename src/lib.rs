@@ -212,3 +212,22 @@ impl<T> AtomSetOnce<T, Box<T>> {
     }
 }
 
+impl<T> AtomSetOnce<T, Arc<T>> {
+    /// Duplicate the inner pointer if it is set
+    pub fn dup<'a>(&self, order: Ordering) -> Option<Arc<T>> {
+        let ptr = self.inner.inner.load(order);
+        if ptr.is_null() {
+            None
+        } else {
+            unsafe {
+                // This is safe since ptr cannot be changed once it is set
+                // which means that this is now a Arc or a Box.
+                let v: Arc<T> = FromRawPtr::from_raw(ptr);
+                let out = v.clone();
+                mem::forget(v);
+                Some(out)
+            }
+        }
+    }
+}
+
