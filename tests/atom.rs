@@ -1,5 +1,6 @@
 extern crate atom;
 
+use std::thread;
 use std::sync::*;
 use std::sync::atomic::AtomicUsize;
 use atom::*;
@@ -52,4 +53,28 @@ fn ensure_drop_arc() {
     assert_eq!(v.load(Ordering::SeqCst), 0);
     drop(a);
     assert_eq!(v.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn ensure_send() {
+    let atom = Arc::new(Atom::empty());
+    let wait = Arc::new(Barrier::new(2));
+
+    let w = wait.clone();
+    let a = atom.clone();
+    thread::spawn(move || {
+        a.swap(Box::new(7u8), Ordering::SeqCst);
+        w.wait();
+    });
+
+    wait.wait();
+    assert_eq!(atom.take(Ordering::SeqCst), Some(Box::new(7u8)));
+}
+
+#[test]
+fn get() {
+    let atom = Arc::new(AtomSetOnce::empty());
+    assert_eq!(atom.get(Ordering::Relaxed), None);
+    assert_eq!(atom.set_if_none(Box::new(8u8), Ordering::SeqCst), Ok(()));
+    assert_eq!(atom.get(Ordering::Relaxed), Some(&8u8));
 }
