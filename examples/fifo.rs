@@ -13,6 +13,7 @@ struct Link {
 
 impl Drop for Link {
     fn drop(&mut self) {
+        // This is done to avoid a recusive drop of the List
         while let Some(mut h) = self.next.atom().take(Ordering::Relaxed) {
            self.next = mem::replace(&mut h.next, AtomSetOnce::empty());
         }

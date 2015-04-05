@@ -2,3 +2,6 @@
 name = "atom"
 version = "0.0.1"
 authors = ["Colin Sherratt <colin.sherratt@gmail.com>"]
+license = "Apache-2.0"
+homepage = "https://github.com/csherratt/atom"
+description = "A safe abstraction around AtomicPtr"
