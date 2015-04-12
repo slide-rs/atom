@@ -95,3 +95,42 @@ fn get_arc() {
 
     assert_eq!(v.load(Ordering::SeqCst), 1);
 }
+
+#[derive(Debug)]
+struct Link {
+    next: Option<Box<Link>>,
+    value: u32
+}
+
+impl Link {
+    fn new(v: u32) -> Box<Link> {
+        Box::new(Link{
+            next: None,
+            value: v
+        })
+    }
+}
+
+impl GetNextMut for Box<Link> {
+    type NextPtr = Option<Box<Link>>;
+    fn get_next(&mut self) -> &mut Option<Box<Link>> {
+        &mut self.next
+    }
+}
+
+#[test]
+fn lifo() {
+    let atom = Atom::empty();
+    for i in 0..100 {
+        atom.replace_and_set_next(Link::new(99-i), Ordering::SeqCst);
+    }
+
+    let expected: Vec<u32> = (0..100).collect();
+    let mut found = Vec::new();
+    let mut chain = atom.take(Ordering::SeqCst);
+    while let Some(v) = chain {
+        found.push(v.value);
+        chain = v.next;
+    }
+    assert_eq!(expected, found);
+}

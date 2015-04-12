@@ -1,4 +1,5 @@
 
+
 use std::sync::atomic::AtomicPtr;
 use std::sync::Arc;
 use std::mem;
@@ -74,6 +75,28 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
             Some(unsafe { FromRawPtr::from_raw(new) })
         } else {
             None
+        }
+    }
+
+    /// Take the current content, write it into P then do a CAS to extent this
+    /// Atom with the previous contents. This can be used to create a LIFO
+    pub fn replace_and_set_next(&self, mut value: P, order: Ordering) where P: GetNextMut<NextPtr=Option<P>> {
+        unsafe {
+            let next = value.get_next() as *mut Option<P>;
+            let raw = value.into_raw();
+            loop {
+                let pcurrent = self.inner.load(Ordering::Relaxed);
+                let current = if pcurrent.is_null() {
+                    None
+                } else {
+                    Some(FromRawPtr::from_raw(pcurrent))
+                };
+                ptr::write(next, current);
+                let last = self.inner.compare_and_swap(pcurrent, raw, order);
+                if last == pcurrent {
+                    break;
+                }
+            }
         }
     }
 }
@@ -231,3 +254,9 @@ impl<T> AtomSetOnce<T, Arc<T>> {
     }
 }
 
+/// This is a utility Trait that fetches the next ptr from
+/// an object.
+pub trait GetNextMut {
+    type NextPtr;
+    fn get_next(&mut self) -> &mut Self::NextPtr;
+}
