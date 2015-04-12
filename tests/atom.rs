@@ -122,7 +122,8 @@ impl GetNextMut for Box<Link> {
 fn lifo() {
     let atom = Atom::empty();
     for i in 0..100 {
-        atom.replace_and_set_next(Link::new(99-i), Ordering::SeqCst);
+        let x = atom.replace_and_set_next(Link::new(99-i), Ordering::SeqCst);
+        assert_eq!(x, i == 0);
     }
 
     let expected: Vec<u32> = (0..100).collect();

@@ -80,7 +80,10 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
 
     /// Take the current content, write it into P then do a CAS to extent this
     /// Atom with the previous contents. This can be used to create a LIFO
-    pub fn replace_and_set_next(&self, mut value: P, order: Ordering) where P: GetNextMut<NextPtr=Option<P>> {
+    ///
+    /// Returns true if this set this migrated the Atom from null.
+    pub fn replace_and_set_next(&self, mut value: P, order: Ordering) -> bool
+        where P: GetNextMut<NextPtr=Option<P>> {
         unsafe {
             let next = value.get_next() as *mut Option<P>;
             let raw = value.into_raw();
@@ -94,7 +97,7 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
                 ptr::write(next, current);
                 let last = self.inner.compare_and_swap(pcurrent, raw, order);
                 if last == pcurrent {
-                    break;
+                    return last.is_null();
                 }
             }
         }
