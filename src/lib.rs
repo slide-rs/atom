@@ -102,6 +102,13 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
             }
         }
     }
+
+    /// Check to see if an atom is None
+    ///
+    /// This only means that the contents was None when it was measured
+    pub fn is_none(&self) -> bool {
+        self.inner.load(Ordering::Relaxed).is_null()
+    }
 }
 
 impl<T, P> Drop for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T>  {
