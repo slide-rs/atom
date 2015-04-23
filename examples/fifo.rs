@@ -21,7 +21,7 @@ use atom::*;
 
 #[derive(Debug)]
 struct Link {
-    next: AtomSetOnce<Link, Box<Link>>
+    next: AtomSetOnce<Box<Link>>
 }
 
 impl Drop for Link {

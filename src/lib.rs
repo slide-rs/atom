@@ -25,20 +25,20 @@ pub use std::sync::atomic::Ordering;
 
 /// An Atom wraps an AtomicPtr, it allows for safe mutation of an atomic
 /// into common Rust Types.
-pub struct Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
-    inner: AtomicPtr<T>,
+pub struct Atom<P> where P: IntoRawPtr + FromRawPtr {
+    inner: AtomicPtr<()>,
     data: PhantomData<P>
 }
 
-impl<T, P> Debug for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
+impl<P> Debug for Atom<P> where P: IntoRawPtr + FromRawPtr {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "atom({:?})", self.inner.load(Ordering::Relaxed))
     }
 }
 
-impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
+impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
     /// Create a empty Atom
-    pub fn empty() -> Atom<T, P> {
+    pub fn empty() -> Atom<P> {
         Atom {
             inner: AtomicPtr::new(ptr::null_mut()),
             data: PhantomData
@@ -46,7 +46,7 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
     }
 
     /// Create a new Atomic from Pointer P
-    pub fn new(value: P) -> Atom<T, P> {
+    pub fn new(value: P) -> Atom<P> {
         Atom {
             inner: AtomicPtr::new(unsafe { value.into_raw() }),
             data: PhantomData
@@ -124,7 +124,7 @@ impl<T, P> Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
     }
 }
 
-impl<T, P> Drop for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T>  {
+impl<P> Drop for Atom<P> where P: IntoRawPtr + FromRawPtr  {
     fn drop(&mut self) {
         // this is probably paranoid
         // TODO: Acquire?
@@ -132,38 +132,38 @@ impl<T, P> Drop for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T>  {
     }
 }
 
-unsafe impl<T, P> Send for Atom<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {}
+unsafe impl<P> Send for Atom<P> where P: IntoRawPtr + FromRawPtr {}
 
 /// Convert from into a raw pointer
-pub trait IntoRawPtr<T> {
-    unsafe fn into_raw(self) -> *mut T;
+pub trait IntoRawPtr {
+    unsafe fn into_raw(self) -> *mut ();
 }
 
 /// Convert from a raw ptr into a pointer
-pub trait FromRawPtr<T> {
-    unsafe fn from_raw(ptr: *mut T) -> Self;
+pub trait FromRawPtr {
+    unsafe fn from_raw(ptr: *mut ()) -> Self;
 }
 
-impl<T> IntoRawPtr<T> for Box<T> {
-    unsafe fn into_raw(self) -> *mut T {
+impl<T> IntoRawPtr for Box<T> {
+    unsafe fn into_raw(self) -> *mut () {
         mem::transmute(self)
     }
 }
 
-impl<T> FromRawPtr<T> for Box<T> {
-    unsafe fn from_raw(ptr: *mut T) -> Box<T> {
+impl<T> FromRawPtr for Box<T> {
+    unsafe fn from_raw(ptr: *mut ()) -> Box<T> {
         mem::transmute(ptr)
     }
 }
 
-impl<T> IntoRawPtr<T> for Arc<T> {
-    unsafe fn into_raw(self) -> *mut T {
+impl<T> IntoRawPtr for Arc<T> {
+    unsafe fn into_raw(self) -> *mut () {
         mem::transmute(self)
     }
 }
 
-impl<T> FromRawPtr<T> for Arc<T> {
-    unsafe fn from_raw(ptr: *mut T) -> Arc<T> {
+impl<T> FromRawPtr for Arc<T> {
+    unsafe fn from_raw(ptr: *mut ()) -> Arc<T> {
         mem::transmute(ptr)
     }
 }
@@ -190,20 +190,20 @@ unsafe fn copy_mut_lifetime<'a, S: ?Sized, T: ?Sized + 'a>(_ptr: &'a S,
 /// `swap` and `take` can be used only with a mutable reference. Meaning
 /// that AtomSetOnce is not usable as a 
 #[derive(Debug)]
-pub struct AtomSetOnce<T, P> where P: IntoRawPtr<T> + FromRawPtr<T> {
-    inner: Atom<T, P>
+pub struct AtomSetOnce<P> where P: IntoRawPtr + FromRawPtr {
+    inner: Atom<P>
 }
 
-impl<T, P> AtomSetOnce<T, P>
-    where P: IntoRawPtr<T> + FromRawPtr<T> + Deref<Target=T> {
+impl<P> AtomSetOnce<P>
+    where P: IntoRawPtr + FromRawPtr {
 
     /// Create a empty AtomSetOnce
-    pub fn empty() -> AtomSetOnce<T, P> {
+    pub fn empty() -> AtomSetOnce<P> {
         AtomSetOnce { inner: Atom::empty() }
     }
 
     /// Create a new AtomSetOnce from Pointer P
-    pub fn new(value: P) -> AtomSetOnce<T, P> {
+    pub fn new(value: P) -> AtomSetOnce<P> {
         AtomSetOnce { inner: Atom::new(value) }
     }
 
@@ -216,10 +216,14 @@ impl<T, P> AtomSetOnce<T, P>
     }
 
     /// Convert an AtomSetOnce into an Atom
-    pub fn into_atom(self) -> Atom<T, P> { self.inner }
+    pub fn into_atom(self) -> Atom<P> { self.inner }
 
     /// Allow access to the atom if exclusive access is granted
-    pub fn atom(&mut self) -> &mut Atom<T, P> { &mut self.inner }
+    pub fn atom(&mut self) -> &mut Atom<P> { &mut self.inner }
+}
+
+impl<T, P> AtomSetOnce<P>
+    where P: IntoRawPtr + FromRawPtr + Deref<Target=T> {
 
     /// If the Atom is set, get the value
     pub fn get<'a>(&'a self, order: Ordering) -> Option<&'a T> {
@@ -239,7 +243,7 @@ impl<T, P> AtomSetOnce<T, P>
     }
 }
 
-impl<T> AtomSetOnce<T, Box<T>> {
+impl<T> AtomSetOnce<Box<T>> {
     /// If the Atom is set, get the value
     pub fn get_mut<'a>(&'a mut self, order: Ordering) -> Option<&'a mut T> {
         let ptr = self.inner.inner.load(order);
@@ -258,7 +262,7 @@ impl<T> AtomSetOnce<T, Box<T>> {
     }
 }
 
-impl<T> AtomSetOnce<T, Arc<T>> {
+impl<T> AtomSetOnce<Arc<T>> {
     /// Duplicate the inner pointer if it is set
     pub fn dup<'a>(&self, order: Ordering) -> Option<Arc<T>> {
         let ptr = self.inner.inner.load(order);
