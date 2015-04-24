@@ -43,7 +43,6 @@ A short example:
 ```rust
 extern crate atom;
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
 use atom::*;
@@ -53,14 +52,14 @@ fn main() {
     let shared_atom = Arc::new(Atom::empty());
 
     // set the value 75 
-    shared_atom.swap(Box::new(75), Ordering::SeqCst);
+    shared_atom.swap(Box::new(75));
 
     // Spawn a bunch of thread that will try and take the value
     let threads: Vec<thread::JoinHandle<()>> = (0..8).map(|_| {
         let shared_atom = shared_atom.clone();
         thread::spawn(move || {
             // Take the contents of the atom, only one will win the race
-            if let Some(v) = shared_atom.take(Ordering::SeqCst) {
+            if let Some(v) = shared_atom.take() {
                 println!("I got it: {:?} :D", v);
             } else {
                 println!("I did not get it :(");
@@ -70,7 +69,7 @@ fn main() {
 
     // join the threads
     for t in threads { t.join().unwrap(); }
-}
+
 ```
 
 The result will look something like this:
