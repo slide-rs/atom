@@ -23,23 +23,23 @@ use atom::*;
 #[test]
 fn swap() {
     let a = Atom::empty();
-    assert_eq!(a.swap(Box::new(1u8), Ordering::Relaxed), None);
-    assert_eq!(a.swap(Box::new(2u8), Ordering::Relaxed), Some(Box::new(1u8)));
-    assert_eq!(a.swap(Box::new(3u8), Ordering::Relaxed), Some(Box::new(2u8)));
+    assert_eq!(a.swap(Box::new(1u8)), None);
+    assert_eq!(a.swap(Box::new(2u8)), Some(Box::new(1u8)));
+    assert_eq!(a.swap(Box::new(3u8)), Some(Box::new(2u8)));
 }
 
 #[test]
 fn take() {
     let a = Atom::new(Box::new(7u8));
-    assert_eq!(a.take(Ordering::Relaxed), Some(Box::new(7)));
-    assert_eq!(a.take(Ordering::Relaxed), None);
+    assert_eq!(a.take(), Some(Box::new(7)));
+    assert_eq!(a.take(), None);
 }
 
 #[test]
 fn set_if_none() {
     let a = Atom::empty();
-    assert_eq!(a.set_if_none(Box::new(7u8), Ordering::Relaxed), None);
-    assert_eq!(a.set_if_none(Box::new(8u8), Ordering::Relaxed), Some(Box::new(8u8)));
+    assert_eq!(a.set_if_none(Box::new(7u8)), None);
+    assert_eq!(a.set_if_none(Box::new(8u8)), Some(Box::new(8u8)));
 }
 
 #[derive(Clone)]
@@ -79,34 +79,34 @@ fn ensure_send() {
     let w = wait.clone();
     let a = atom.clone();
     thread::spawn(move || {
-        a.swap(Box::new(7u8), Ordering::SeqCst);
+        a.swap(Box::new(7u8));
         w.wait();
     });
 
     wait.wait();
-    assert_eq!(atom.take(Ordering::SeqCst), Some(Box::new(7u8)));
+    assert_eq!(atom.take(), Some(Box::new(7u8)));
 }
 
 #[test]
 fn get() {
     let atom = Arc::new(AtomSetOnce::empty());
-    assert_eq!(atom.get(Ordering::Relaxed), None);
-    assert_eq!(atom.set_if_none(Box::new(8u8), Ordering::SeqCst), None);
-    assert_eq!(atom.get(Ordering::Relaxed), Some(&8u8));
+    assert_eq!(atom.get(), None);
+    assert_eq!(atom.set_if_none(Box::new(8u8)), None);
+    assert_eq!(atom.get(), Some(&8u8));
 }
 
 #[test]
 fn get_arc() {
     let atom = Arc::new(AtomSetOnce::empty());
-    assert_eq!(atom.get(Ordering::Relaxed), None);
-    assert_eq!(atom.set_if_none(Arc::new(8u8), Ordering::SeqCst), None);
-    assert_eq!(atom.get(Ordering::Relaxed), Some(&8u8));
+    assert_eq!(atom.get(), None);
+    assert_eq!(atom.set_if_none(Arc::new(8u8)), None);
+    assert_eq!(atom.get(), Some(&8u8));
 
     let v = Arc::new(AtomicUsize::new(0));
     let atom = Arc::new(AtomSetOnce::empty());
-    atom.get(Ordering::Relaxed);
-    atom.set_if_none(Arc::new(Canary(v.clone())), Ordering::SeqCst);
-    atom.get(Ordering::Relaxed);
+    atom.get();
+    atom.set_if_none(Arc::new(Canary(v.clone())));
+    atom.get();
     drop(atom);
 
     assert_eq!(v.load(Ordering::SeqCst), 1);
@@ -138,13 +138,13 @@ impl GetNextMut for Box<Link> {
 fn lifo() {
     let atom = Atom::empty();
     for i in 0..100 {
-        let x = atom.replace_and_set_next(Link::new(99-i), Ordering::SeqCst);
+        let x = atom.replace_and_set_next(Link::new(99-i));
         assert_eq!(x, i == 0);
     }
 
     let expected: Vec<u32> = (0..100).collect();
     let mut found = Vec::new();
-    let mut chain = atom.take(Ordering::SeqCst);
+    let mut chain = atom.take();
     while let Some(v) = chain {
         found.push(v.value);
         chain = v.next;
@@ -182,7 +182,7 @@ fn lifo_drop() {
     link.next = Some(LinkCanary::new(canary.clone()));
 
     let atom = Atom::empty();
-    atom.replace_and_set_next(link, Ordering::SeqCst);
+    atom.replace_and_set_next(link);
     assert_eq!(1, v.load(Ordering::SeqCst));
     drop(atom);
     assert_eq!(2, v.load(Ordering::SeqCst));

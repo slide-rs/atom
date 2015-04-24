@@ -17,7 +17,6 @@ extern crate atom;
 use std::thread;
 use std::mem;
 use std::sync::{Arc, Barrier};
-use std::sync::atomic::Ordering;
 use atom::*;
 
 const THREADS: usize = 100;
@@ -30,7 +29,7 @@ struct Link {
 impl Drop for Link {
     fn drop(&mut self) {
         // This is done to avoid a recusive drop of the List
-        while let Some(mut h) = self.next.atom().take(Ordering::Relaxed) {
+        while let Some(mut h) = self.next.atom().take() {
            self.next = mem::replace(&mut h.next, AtomSetOnce::empty());
         }
     }
@@ -54,11 +53,11 @@ fn main() {
 
 
                 loop {
-                    while let Some(h) = hptr.next.get(Ordering::Relaxed) {
+                    while let Some(h) = hptr.next.get() {
                         hptr = h;
                     }
 
-                    my_awesome_node = match hptr.next.set_if_none(my_awesome_node, Ordering::Relaxed) {
+                    my_awesome_node = match hptr.next.set_if_none(my_awesome_node) {
                         Some(v) => v,
                         None => break
                     };
@@ -72,7 +71,7 @@ fn main() {
 
     let mut hptr = &*head;
     let mut count = 0;
-    while let Some(h) = hptr.next.get(Ordering::Relaxed) {
+    while let Some(h) = hptr.next.get() {
         hptr = h;
         count += 1;
     }

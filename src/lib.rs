@@ -54,9 +54,9 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
 
     /// Swap a new value into the Atom, This will try multiple
     /// times until it succeeds. The old value will be returned.
-    pub fn swap(&self, v: P, order: Ordering) -> Option<P> {
+    pub fn swap(&self, v: P) -> Option<P> {
         let new = unsafe { v.into_raw() };
-        let old = self.inner.swap(new, order);
+        let old = self.inner.swap(new, Ordering::AcqRel);
         if !old.is_null() {
             Some(unsafe { FromRawPtr::from_raw(old) })
         } else {
@@ -67,8 +67,8 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
     /// Take the value of the Atom replacing it with null pointer
     /// Returning the contents. If the contents was a `null` pointer the
     /// result will be `None`.
-    pub fn take(&self, order: Ordering) -> Option<P> {
-        let old = self.inner.swap(ptr::null_mut(), order);
+    pub fn take(&self) -> Option<P> {
+        let old = self.inner.swap(ptr::null_mut(), Ordering::Acquire);
         if !old.is_null() {
             Some(unsafe { FromRawPtr::from_raw(old) })
         } else {
@@ -80,9 +80,9 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
     /// this will return `None` if the value was written,
     /// otherwise a `Some(v)` will be returned, where the value was
     /// the same value that you passed into this function
-    pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
+    pub fn set_if_none(&self, v: P) -> Option<P> {
         let new = unsafe { v.into_raw() };
-        let old = self.inner.compare_and_swap(ptr::null_mut(), new, order);
+        let old = self.inner.compare_and_swap(ptr::null_mut(), new, Ordering::Release);
         if !old.is_null() {
             Some(unsafe { FromRawPtr::from_raw(new) })
         } else {
@@ -94,7 +94,7 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
     /// Atom with the previous contents. This can be used to create a LIFO
     ///
     /// Returns true if this set this migrated the Atom from null.
-    pub fn replace_and_set_next(&self, mut value: P, order: Ordering) -> bool
+    pub fn replace_and_set_next(&self, mut value: P) -> bool
         where P: GetNextMut<NextPtr=Option<P>> {
         unsafe {
             let next = value.get_next() as *mut Option<P>;
@@ -110,7 +110,7 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
                     Some(FromRawPtr::from_raw(pcurrent))
                 };
                 ptr::write(next, current);
-                let last = self.inner.compare_and_swap(pcurrent, raw, order);
+                let last = self.inner.compare_and_swap(pcurrent, raw, Ordering::AcqRel);
                 if last == pcurrent {
                     return last.is_null();
                 }
@@ -128,9 +128,7 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
 
 impl<P> Drop for Atom<P> where P: IntoRawPtr + FromRawPtr  {
     fn drop(&mut self) {
-        // this is probably paranoid
-        // TODO: Acquire?
-        self.take(Ordering::SeqCst);
+        self.take();
     }
 }
 
@@ -213,8 +211,8 @@ impl<P> AtomSetOnce<P>
     /// this will return `OK(())` if the value was written,
     /// otherwise a `Err(P)` will be returned, where the value was
     /// the same value that you passed into this function
-    pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
-        self.inner.set_if_none(v, order)
+    pub fn set_if_none(&self, v: P) -> Option<P> {
+        self.inner.set_if_none(v)
     }
 
     /// Convert an AtomSetOnce into an Atom
@@ -228,8 +226,8 @@ impl<T, P> AtomSetOnce<P>
     where P: IntoRawPtr + FromRawPtr + Deref<Target=T> {
 
     /// If the Atom is set, get the value
-    pub fn get<'a>(&'a self, order: Ordering) -> Option<&'a T> {
-        let ptr = self.inner.inner.load(order);
+    pub fn get<'a>(&'a self) -> Option<&'a T> {
+        let ptr = self.inner.inner.load(Ordering::Acquire);
         if ptr.is_null() {
             None
         } else {
@@ -247,8 +245,8 @@ impl<T, P> AtomSetOnce<P>
 
 impl<T> AtomSetOnce<Box<T>> {
     /// If the Atom is set, get the value
-    pub fn get_mut<'a>(&'a mut self, order: Ordering) -> Option<&'a mut T> {
-        let ptr = self.inner.inner.load(order);
+    pub fn get_mut<'a>(&'a mut self) -> Option<&'a mut T> {
+        let ptr = self.inner.inner.load(Ordering::Acquire);
         if ptr.is_null() {
             None
         } else {
@@ -266,8 +264,8 @@ impl<T> AtomSetOnce<Box<T>> {
 
 impl<T> AtomSetOnce<Arc<T>> {
     /// Duplicate the inner pointer if it is set
-    pub fn dup<'a>(&self, order: Ordering) -> Option<Arc<T>> {
-        let ptr = self.inner.inner.load(order);
+    pub fn dup<'a>(&self) -> Option<Arc<T>> {
+        let ptr = self.inner.inner.load(Ordering::Acquire);
         if ptr.is_null() {
             None
         } else {
