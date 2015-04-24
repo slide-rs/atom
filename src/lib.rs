@@ -99,6 +99,9 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
         unsafe {
             let next = value.get_next() as *mut Option<P>;
             let raw = value.into_raw();
+            // Iff next was set to Some(P) we want to 
+            // assert that it was droppeds
+            drop(ptr::read(next));
             loop {
                 let pcurrent = self.inner.load(Ordering::Relaxed);
                 let current = if pcurrent.is_null() {

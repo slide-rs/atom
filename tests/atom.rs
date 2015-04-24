@@ -42,6 +42,7 @@ fn set_if_none() {
     assert_eq!(a.set_if_none(Box::new(8u8), Ordering::Relaxed), Some(Box::new(8u8)));
 }
 
+#[derive(Clone)]
 struct Canary(Arc<AtomicUsize>);
 
 impl Drop for Canary {
@@ -149,4 +150,40 @@ fn lifo() {
         chain = v.next;
     }
     assert_eq!(expected, found);
+}
+
+#[allow(dead_code)]
+struct LinkCanary {
+    next: Option<Box<LinkCanary>>,
+    value: Canary
+}
+
+impl LinkCanary {
+    fn new(v: Canary) -> Box<LinkCanary> {
+        Box::new(LinkCanary{
+            next: None,
+            value: v
+        })
+    }
+}
+
+impl GetNextMut for Box<LinkCanary> {
+    type NextPtr = Option<Box<LinkCanary>>;
+    fn get_next(&mut self) -> &mut Option<Box<LinkCanary>> {
+        &mut self.next
+    }
+}
+
+#[test]
+fn lifo_drop() {
+    let v = Arc::new(AtomicUsize::new(0));
+    let canary = Canary(v.clone());
+    let mut link = LinkCanary::new(canary.clone());
+    link.next = Some(LinkCanary::new(canary.clone()));
+
+    let atom = Atom::empty();
+    atom.replace_and_set_next(link, Ordering::SeqCst);
+    assert_eq!(1, v.load(Ordering::SeqCst));
+    drop(atom);
+    assert_eq!(2, v.load(Ordering::SeqCst));
 }
