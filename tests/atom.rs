@@ -17,6 +17,7 @@ extern crate atom;
 use std::thread;
 use std::sync::*;
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use atom::*;
 
 #[test]

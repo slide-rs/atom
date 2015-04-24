@@ -17,7 +17,10 @@ extern crate atom;
 use std::thread;
 use std::mem;
 use std::sync::{Arc, Barrier};
+use std::sync::atomic::Ordering;
 use atom::*;
+
+const THREADS: usize = 100;
 
 #[derive(Debug)]
 struct Link {
@@ -34,11 +37,11 @@ impl Drop for Link {
 }
 
 fn main() {
-    let b = Arc::new(Barrier::new(101));
+    let b = Arc::new(Barrier::new(THREADS + 1));
 
     let head = Arc::new(Link{next: AtomSetOnce::empty()});
 
-    for _ in (0..100) {
+    for _ in (0..THREADS) {
         let b = b.clone();
         let head = head.clone();
         thread::spawn(move || {
@@ -73,5 +76,5 @@ fn main() {
         hptr = h;
         count += 1;
     }
-    println!("Using {} threads we wrote {} links at the same time!", 10, count);
+    println!("Using {} threads we wrote {} links at the same time!", THREADS, count);
 }

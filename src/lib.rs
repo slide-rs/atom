@@ -20,8 +20,7 @@ use std::ptr;
 use std::ops::Deref;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
-
-pub use std::sync::atomic::Ordering;
+use std::sync::atomic::Ordering;
 
 /// An Atom wraps an AtomicPtr, it allows for safe mutation of an atomic
 /// into common Rust Types.
