@@ -133,6 +133,7 @@ impl<P> Drop for Atom<P> where P: IntoRawPtr + FromRawPtr  {
 }
 
 unsafe impl<P> Send for Atom<P> where P: IntoRawPtr + FromRawPtr {}
+unsafe impl<P> Sync for Atom<P> where P: IntoRawPtr + FromRawPtr {}
 
 /// Convert from into a raw pointer
 pub trait IntoRawPtr {
