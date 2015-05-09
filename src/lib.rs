@@ -221,6 +221,11 @@ impl<P> AtomSetOnce<P>
 
     /// Allow access to the atom if exclusive access is granted
     pub fn atom(&mut self) -> &mut Atom<P> { &mut self.inner }
+
+    /// Check to see if an atom is None
+    ///
+    /// This only means that the contents was None when it was measured
+    pub fn is_none(&self) -> bool { self.inner.is_none() }
 }
 
 impl<T, P> AtomSetOnce<P>
@@ -263,9 +268,9 @@ impl<T> AtomSetOnce<Box<T>> {
     }
 }
 
-impl<T> AtomSetOnce<Arc<T>> {
+impl<T> AtomSetOnce<T> where T: Clone+IntoRawPtr+FromRawPtr {
     /// Duplicate the inner pointer if it is set
-    pub fn dup<'a>(&self) -> Option<Arc<T>> {
+    pub fn dup<'a>(&self) -> Option<T> {
         let ptr = self.inner.inner.load(Ordering::Acquire);
         if ptr.is_null() {
             None
@@ -273,7 +278,7 @@ impl<T> AtomSetOnce<Arc<T>> {
             unsafe {
                 // This is safe since ptr cannot be changed once it is set
                 // which means that this is now a Arc or a Box.
-                let v: Arc<T> = FromRawPtr::from_raw(ptr);
+                let v: T = FromRawPtr::from_raw(ptr);
                 let out = v.clone();
                 mem::forget(v);
                 Some(out)
