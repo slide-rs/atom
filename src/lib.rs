@@ -128,7 +128,12 @@ impl<P> Atom<P> where P: IntoRawPtr + FromRawPtr {
 
 impl<P> Drop for Atom<P> where P: IntoRawPtr + FromRawPtr  {
     fn drop(&mut self) {
-        self.take();
+        unsafe {
+            let ptr = self.inner.load(Ordering::Relaxed);
+            if !ptr.is_null() {
+                let _: P = FromRawPtr::from_raw(ptr);
+            }
+        }
     }
 }
 
