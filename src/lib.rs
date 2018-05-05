@@ -151,26 +151,30 @@ pub trait FromRawPtr {
 }
 
 impl<T> IntoRawPtr for Box<T> {
+    #[inline]
     unsafe fn into_raw(self) -> *mut () {
-        mem::transmute(self)
+        Box::into_raw(self) as *mut ()
     }
 }
 
 impl<T> FromRawPtr for Box<T> {
+    #[inline]
     unsafe fn from_raw(ptr: *mut ()) -> Box<T> {
-        mem::transmute(ptr)
+        Box::from_raw(ptr as *mut T)
     }
 }
 
 impl<T> IntoRawPtr for Arc<T> {
+    #[inline]
     unsafe fn into_raw(self) -> *mut () {
-        mem::transmute(self)
+        Arc::into_raw(self) as *mut _ as *mut ()
     }
 }
 
 impl<T> FromRawPtr for Arc<T> {
+    #[inline]
     unsafe fn from_raw(ptr: *mut ()) -> Arc<T> {
-        mem::transmute(ptr)
+        Arc::from_raw(ptr as *const () as *const T)
     }
 }
 
@@ -203,12 +207,12 @@ pub struct AtomSetOnce<P> where P: IntoRawPtr + FromRawPtr {
 impl<P> AtomSetOnce<P>
     where P: IntoRawPtr + FromRawPtr {
 
-    /// Create a empty AtomSetOnce
+    /// Create an empty `AtomSetOnce`
     pub fn empty() -> AtomSetOnce<P> {
         AtomSetOnce { inner: Atom::empty() }
     }
 
-    /// Create a new AtomSetOnce from Pointer P
+    /// Create a new `AtomSetOnce` from Pointer P
     pub fn new(value: P) -> AtomSetOnce<P> {
         AtomSetOnce { inner: Atom::new(value) }
     }
@@ -221,7 +225,7 @@ impl<P> AtomSetOnce<P>
         self.inner.set_if_none(v)
     }
 
-    /// Convert an AtomSetOnce into an Atom
+    /// Convert an `AtomSetOnce` into an `Atom`
     pub fn into_atom(self) -> Atom<P> { self.inner }
 
     /// Allow access to the atom if exclusive access is granted
