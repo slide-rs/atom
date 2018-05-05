@@ -103,20 +103,18 @@ where
     where
         P: GetNextMut<NextPtr = Option<P>>,
     {
-        unsafe {
-            let next = value.get_next() as *mut Option<P>;
-            let raw = value.into_raw();
-            // Iff next was set to Some(P) we want to
-            // assert that it was droppeds
-            drop(ptr::read(next));
-            loop {
-                let pcurrent = self.inner.load(load_order);
-                let current = Self::inner_from_raw(pcurrent);
-                ptr::write(next, current);
-                let last = self.inner.compare_and_swap(pcurrent, raw, cas_order);
-                if last == pcurrent {
-                    return last.is_null();
-                }
+        let next = value.get_next() as *mut Option<P>;
+        let raw = value.into_raw();
+        // Iff next was set to Some(P) we want to
+        // assert that it was droppeds
+        drop(unsafe { ptr::read(next) });
+        loop {
+            let pcurrent = self.inner.load(load_order);
+            let current = unsafe { Self::inner_from_raw(pcurrent) };
+            unsafe { ptr::write(next, current) };
+            let last = self.inner.compare_and_swap(pcurrent, raw, cas_order);
+            if last == pcurrent {
+                return last.is_null();
             }
         }
     }
