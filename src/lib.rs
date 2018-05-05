@@ -55,7 +55,7 @@ where
     /// Create a new Atomic from Pointer P
     pub fn new(value: P) -> Atom<P> {
         Atom {
-            inner: AtomicPtr::new(unsafe { value.into_raw() }),
+            inner: AtomicPtr::new(value.into_raw()),
             data: PhantomData,
         }
     }
@@ -63,7 +63,7 @@ where
     /// Swap a new value into the Atom, This will try multiple
     /// times until it succeeds. The old value will be returned.
     pub fn swap(&self, v: P, order: Ordering) -> Option<P> {
-        let new = unsafe { v.into_raw() };
+        let new = v.into_raw();
         let old = self.inner.swap(new, order);
         if !old.is_null() {
             Some(unsafe { FromRawPtr::from_raw(old) })
@@ -89,7 +89,7 @@ where
     /// otherwise a `Some(v)` will be returned, where the value was
     /// the same value that you passed into this function
     pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
-        let new = unsafe { v.into_raw() };
+        let new = v.into_raw();
         let old = self.inner.compare_and_swap(ptr::null_mut(), new, order);
         if !old.is_null() {
             Some(unsafe { FromRawPtr::from_raw(new) })
@@ -168,7 +168,7 @@ where
 
 /// Convert from into a raw pointer
 pub trait IntoRawPtr {
-    unsafe fn into_raw(self) -> *mut ();
+    fn into_raw(self) -> *mut ();
 }
 
 /// Convert from a raw ptr into a pointer
@@ -178,7 +178,7 @@ pub trait FromRawPtr {
 
 impl<T> IntoRawPtr for Box<T> {
     #[inline]
-    unsafe fn into_raw(self) -> *mut () {
+    fn into_raw(self) -> *mut () {
         Box::into_raw(self) as *mut ()
     }
 }
@@ -192,7 +192,7 @@ impl<T> FromRawPtr for Box<T> {
 
 impl<T> IntoRawPtr for Arc<T> {
     #[inline]
-    unsafe fn into_raw(self) -> *mut () {
+    fn into_raw(self) -> *mut () {
         Arc::into_raw(self) as *mut T as *mut ()
     }
 }
