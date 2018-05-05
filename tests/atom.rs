@@ -14,11 +14,11 @@
 
 extern crate atom;
 
-use std::thread;
-use std::sync::*;
+use atom::*;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use atom::*;
+use std::sync::*;
+use std::thread;
 
 #[test]
 fn swap() {
@@ -115,14 +115,14 @@ fn get_arc() {
 #[derive(Debug)]
 struct Link {
     next: Option<Box<Link>>,
-    value: u32
+    value: u32,
 }
 
 impl Link {
     fn new(v: u32) -> Box<Link> {
-        Box::new(Link{
+        Box::new(Link {
             next: None,
-            value: v
+            value: v,
         })
     }
 }
@@ -138,7 +138,7 @@ impl GetNextMut for Box<Link> {
 fn lifo() {
     let atom = Atom::empty();
     for i in 0..100 {
-        let x = atom.replace_and_set_next(Link::new(99-i));
+        let x = atom.replace_and_set_next(Link::new(99 - i));
         assert_eq!(x, i == 0);
     }
 
@@ -155,14 +155,14 @@ fn lifo() {
 #[allow(dead_code)]
 struct LinkCanary {
     next: Option<Box<LinkCanary>>,
-    value: Canary
+    value: Canary,
 }
 
 impl LinkCanary {
     fn new(v: Canary) -> Box<LinkCanary> {
-        Box::new(LinkCanary{
+        Box::new(LinkCanary {
             next: None,
-            value: v
+            value: v,
         })
     }
 }

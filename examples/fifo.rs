@@ -14,23 +14,23 @@
 
 extern crate atom;
 
-use std::thread;
+use atom::*;
 use std::mem;
 use std::sync::{Arc, Barrier};
-use atom::*;
+use std::thread;
 
 const THREADS: usize = 100;
 
 #[derive(Debug)]
 struct Link {
-    next: AtomSetOnce<Box<Link>>
+    next: AtomSetOnce<Box<Link>>,
 }
 
 impl Drop for Link {
     fn drop(&mut self) {
         // This is done to avoid a recusive drop of the List
         while let Some(mut h) = self.next.atom().take() {
-           self.next = mem::replace(&mut h.next, AtomSetOnce::empty());
+            self.next = mem::replace(&mut h.next, AtomSetOnce::empty());
         }
     }
 }
@@ -38,19 +38,20 @@ impl Drop for Link {
 fn main() {
     let b = Arc::new(Barrier::new(THREADS + 1));
 
-    let head = Arc::new(Link{next: AtomSetOnce::empty()});
+    let head = Arc::new(Link {
+        next: AtomSetOnce::empty(),
+    });
 
-    for _ in (0..THREADS) {
+    for _ in 0..THREADS {
         let b = b.clone();
         let head = head.clone();
         thread::spawn(move || {
             let mut hptr = &*head;
 
-            for _ in (0..10_000) {
+            for _ in 0..10_000 {
                 let mut my_awesome_node = Box::new(Link {
-                    next: AtomSetOnce::empty()
+                    next: AtomSetOnce::empty(),
                 });
-
 
                 loop {
                     while let Some(h) = hptr.next.get() {
@@ -59,7 +60,7 @@ fn main() {
 
                     my_awesome_node = match hptr.next.set_if_none(my_awesome_node) {
                         Some(v) => v,
-                        None => break
+                        None => break,
                     };
                 }
             }
@@ -75,5 +76,8 @@ fn main() {
         hptr = h;
         count += 1;
     }
-    println!("Using {} threads we wrote {} links at the same time!", THREADS, count);
+    println!(
+        "Using {} threads we wrote {} links at the same time!",
+        THREADS, count
+    );
 }
