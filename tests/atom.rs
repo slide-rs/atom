@@ -15,6 +15,7 @@
 extern crate atom;
 
 use atom::*;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::*;
@@ -43,6 +44,72 @@ fn set_if_none() {
         a.set_if_none(Box::new(8u8), Ordering::Release),
         Some(Box::new(8u8))
     );
+}
+
+#[test]
+fn compare_and_swap() {
+    cas_test_helper(|a, cas_val, next_val| a.compare_and_swap(cas_val, next_val, Ordering::SeqCst));
+}
+
+#[test]
+fn compare_exchange() {
+    cas_test_helper(|a, cas_val, next_val| {
+        a.compare_exchange(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+    });
+}
+
+#[test]
+fn compare_exchange_weak() {
+    cas_test_helper(|a, cas_val, next_val| {
+        a.compare_exchange_weak(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+    });
+}
+
+fn cas_test_helper(
+    cas: fn(&Atom<Arc<String>>, Option<&Arc<String>>, Option<Arc<String>>)
+        -> Result<Option<Arc<String>>, (Option<Arc<String>>, *mut Arc<String>)>,
+) {
+    let cur_val = Arc::new("current".to_owned());
+    let next_val = Arc::new("next".to_owned());
+    let other_val = Arc::new("other".to_owned());
+
+    let a = Arc::new(Atom::new(cur_val.clone()));
+
+    let num_threads = 10;
+    let cas_thread = num_threads / 2;
+    let pprevs: Vec<Result<usize, usize>> = (0..num_threads)
+        .map(|i| {
+            let a = a.clone();
+            let cur_val = cur_val.clone();
+            let next_val = next_val.clone();
+            let other_val = other_val.clone();
+            thread::spawn(move || {
+                let cas_val = Some(if i == cas_thread {
+                    &cur_val
+                } else {
+                    &other_val
+                });
+                match cas(&a, cas_val, Some(next_val.clone())) {
+                    Ok(prev) => {
+                        let prev = prev.unwrap();
+                        assert!(Arc::ptr_eq(&prev, &cur_val));
+                        assert!(!Arc::ptr_eq(&prev, &next_val));
+                        Ok(prev.into_raw() as usize)
+                    }
+                    Err((_, pprev)) => Err(pprev as usize),
+                }
+            })
+        })
+        .map(|handle| handle.join().unwrap())
+        .collect();
+    assert_eq!(pprevs.iter().filter(|pprev| pprev.is_ok()).count(), 1);
+    let uniq_pprevs: HashSet<_> = pprevs
+        .into_iter()
+        .map(|pprev| pprev.unwrap_or_else(|pprev| pprev) as *mut _)
+        .collect();
+    assert!(uniq_pprevs.contains(&cur_val.into_raw()));
+    assert!(!uniq_pprevs.contains(&other_val.into_raw()));
+    assert_eq!(a.take(Ordering::Relaxed), Some(next_val));
 }
 
 #[derive(Clone)]

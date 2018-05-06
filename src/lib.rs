@@ -127,11 +127,91 @@ where
     }
 
     #[inline]
+    fn inner_into_raw(val: Option<P>) -> *mut () {
+        match val {
+            Some(val) => val.into_raw(),
+            None => ptr::null_mut(),
+        }
+    }
+
+    #[inline]
     unsafe fn inner_from_raw(ptr: *mut ()) -> Option<P> {
         if !ptr.is_null() {
             Some(FromRawPtr::from_raw(ptr))
         } else {
             None
+        }
+    }
+}
+
+impl<P, T> Atom<P>
+where
+    P: IntoRawPtr + FromRawPtr + Deref<Target = T>,
+{
+    /// Stores a value into the pointer if the current value is the same as the current value.
+    ///
+    /// The return value is always the previous value. If it is equal to current, then the value was updated.
+    ///
+    /// compare_and_swap also takes an Ordering argument which describes the memory ordering of this operation.
+    pub fn compare_and_swap(
+        &self,
+        current: Option<&P>,
+        new: Option<P>,
+        order: Ordering,
+    ) -> Result<Option<P>, (Option<P>, *mut P)> {
+        let pcurrent = Self::inner_as_ptr(current);
+        let pnew = Self::inner_into_raw(new);
+        let pprev = self.inner.compare_and_swap(pcurrent, pnew, order);
+        if pprev == pcurrent {
+            Ok(unsafe { Self::inner_from_raw(pprev) })
+        } else {
+            Err((unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
+        }
+    }
+
+    /// Stores a value into the pointer if the current value is the same as the `current` value.
+    ///
+    /// The return value is a result indicating whether the new value was written and containing the previous value. On success this value is guaranteed to be equal to `current`.
+    ///
+    /// `compare_exchange` takes two `Ordering` arguments to describe the memory ordering of this operation. The first describes the required ordering if the operation succeeds while the second describes the required ordering when the operation fails. The failure ordering can't be `Release` or `AcqRel` and must be equivalent or weaker than the success ordering.
+    pub fn compare_exchange(
+        &self,
+        current: Option<&P>,
+        new: Option<P>,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Option<P>, (Option<P>, *mut P)> {
+        let pnew = Self::inner_into_raw(new);
+        self.inner
+            .compare_exchange(Self::inner_as_ptr(current), pnew, success, failure)
+            .map(|pprev| unsafe { Self::inner_from_raw(pprev) })
+            .map_err(|pprev| (unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
+    }
+
+    /// Stores a value into the pointer if the current value is the same as the `current` value.
+    ///
+    /// Unlike `compare_exchange`, this function is allowed to spuriously fail even when the comparison succeeds, which can result in more efficient code on some platforms. The return value is a result indicating whether the new value was written and containing the previous value.
+    ///
+    /// `compare_exchange_weak` takes two `Ordering` arguments to describe the memory ordering of this operation. The first describes the required ordering if the operation succeeds while the second describes the required ordering when the operation fails. The failure ordering can't be `Release` or `AcqRel` and must be equivalent or weaker than the success ordering.
+    pub fn compare_exchange_weak(
+        &self,
+        current: Option<&P>,
+        new: Option<P>,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Option<P>, (Option<P>, *mut P)> {
+        let pnew = Self::inner_into_raw(new);
+        self.inner
+            .compare_exchange_weak(Self::inner_as_ptr(current), pnew, success, failure)
+            .map(|pprev| unsafe { Self::inner_from_raw(pprev) })
+            .map_err(|pprev| (unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
+    }
+
+    #[inline]
+    fn inner_as_ptr(val: Option<&P>) -> *mut () {
+        match val {
+            Some(val) => &**val as *const _ as *mut (),
+            None => ptr::null_mut(),
         }
     }
 }
