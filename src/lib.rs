@@ -204,6 +204,21 @@ impl<T> FromRawPtr for Arc<T> {
     }
 }
 
+// This impl can be useful for stack-allocated and 'static values.
+impl<'a, T> IntoRawPtr for &'a T {
+    #[inline]
+    unsafe fn into_raw(self) -> *mut () {
+        self as *const _ as *mut ()
+    }
+}
+
+impl<'a, T> FromRawPtr for &'a T {
+    #[inline]
+    unsafe fn from_raw(ptr: *mut ()) -> &'a T {
+        &*(ptr as *mut T)
+    }
+}
+
 /// Transforms lifetime of the second pointer to match the first.
 #[inline]
 unsafe fn copy_lifetime<'a, S: ?Sized, T: ?Sized + 'a>(_ptr: &'a S, ptr: &T) -> &'a T {
