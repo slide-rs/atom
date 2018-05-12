@@ -137,8 +137,16 @@ impl<P> Drop for Atom<P> where P: IntoRawPtr + FromRawPtr  {
     }
 }
 
-unsafe impl<P> Send for Atom<P> where P: IntoRawPtr + FromRawPtr {}
-unsafe impl<P> Sync for Atom<P> where P: IntoRawPtr + FromRawPtr {}
+unsafe impl<P> Send for Atom<P>
+where
+    P: IntoRawPtr + FromRawPtr + Send,
+{
+}
+unsafe impl<P> Sync for Atom<P>
+where
+    P: IntoRawPtr + FromRawPtr + Send,
+{
+}
 
 /// Convert from into a raw pointer
 pub trait IntoRawPtr {
@@ -167,7 +175,7 @@ impl<T> FromRawPtr for Box<T> {
 impl<T> IntoRawPtr for Arc<T> {
     #[inline]
     unsafe fn into_raw(self) -> *mut () {
-        Arc::into_raw(self) as *mut _ as *mut ()
+        Arc::into_raw(self) as *mut T as *mut ()
     }
 }
 
