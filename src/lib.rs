@@ -12,6 +12,7 @@
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
 
+use std::cell::UnsafeCell;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
@@ -28,7 +29,7 @@ where
     P: IntoRawPtr + FromRawPtr,
 {
     inner: AtomicPtr<()>,
-    data: PhantomData<P>,
+    data: PhantomData<UnsafeCell<P>>,
 }
 
 impl<P> Debug for Atom<P>
