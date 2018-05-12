@@ -158,12 +158,12 @@ where
 
 unsafe impl<P> Send for Atom<P>
 where
-    P: IntoRawPtr + FromRawPtr,
+    P: IntoRawPtr + FromRawPtr + Send,
 {
 }
 unsafe impl<P> Sync for Atom<P>
 where
-    P: IntoRawPtr + FromRawPtr,
+    P: IntoRawPtr + FromRawPtr + Send,
 {
 }
 
