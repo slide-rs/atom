@@ -105,9 +105,9 @@ where
     {
         let next = value.get_next() as *mut Option<P>;
         let raw = value.into_raw();
-        // Iff next was set to Some(P) we want to
+        // If next was set to Some(P) we want to
         // assert that it was droppeds
-        drop(unsafe { ptr::read(next) });
+        unsafe { ptr::drop_in_place(next) };
         loop {
             let pcurrent = self.inner.load(load_order);
             let current = unsafe { Self::inner_from_raw(pcurrent) };
