@@ -141,12 +141,7 @@ where
     P: IntoRawPtr + FromRawPtr,
 {
     fn drop(&mut self) {
-        let ptr = self.inner.load(Ordering::Relaxed);
-        let val = unsafe { Self::inner_from_raw(ptr) };
-        match val {
-            Some(_ptr) => {}
-            None => {}
-        }
+        self.take(Ordering::Relaxed);
     }
 }
 
