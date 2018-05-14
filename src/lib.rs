@@ -198,7 +198,7 @@ impl<T> FromRawPtr for Arc<T> {
 // This impl can be useful for stack-allocated and 'static values.
 impl<'a, T> IntoRawPtr for &'a T {
     #[inline]
-    unsafe fn into_raw(self) -> *mut () {
+    fn into_raw(self) -> *mut () {
         self as *const _ as *mut ()
     }
 }
