@@ -12,6 +12,7 @@
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
 
+use std::cell::UnsafeCell;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
@@ -28,7 +29,7 @@ where
     P: IntoRawPtr + FromRawPtr,
 {
     inner: AtomicPtr<()>,
-    data: PhantomData<P>,
+    data: PhantomData<UnsafeCell<P>>,
 }
 
 impl<P> Debug for Atom<P>
@@ -147,12 +148,12 @@ where
 
 unsafe impl<P> Send for Atom<P>
 where
-    P: IntoRawPtr + FromRawPtr,
+    P: IntoRawPtr + FromRawPtr + Send,
 {
 }
 unsafe impl<P> Sync for Atom<P>
 where
-    P: IntoRawPtr + FromRawPtr,
+    P: IntoRawPtr + FromRawPtr + Send,
 {
 }
 
@@ -191,6 +192,21 @@ impl<T> FromRawPtr for Arc<T> {
     #[inline]
     unsafe fn from_raw(ptr: *mut ()) -> Arc<T> {
         Arc::from_raw(ptr as *const () as *const T)
+    }
+}
+
+// This impl can be useful for stack-allocated and 'static values.
+impl<'a, T> IntoRawPtr for &'a T {
+    #[inline]
+    fn into_raw(self) -> *mut () {
+        self as *const _ as *mut ()
+    }
+}
+
+impl<'a, T> FromRawPtr for &'a T {
+    #[inline]
+    unsafe fn from_raw(ptr: *mut ()) -> &'a T {
+        &*(ptr as *mut T)
     }
 }
 

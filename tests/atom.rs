@@ -190,3 +190,10 @@ fn lifo_drop() {
     drop(atom);
     assert_eq!(2, v.load(Ordering::SeqCst));
 }
+
+#[test]
+fn borrow() {
+    let a = Atom::new(&5);
+    assert_eq!(a.swap(&7, Ordering::Relaxed), Some(&5));
+    assert_eq!(a.take(Ordering::Relaxed), Some(&7));
+}
