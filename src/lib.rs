@@ -148,11 +148,14 @@ impl<P, T> Atom<P>
 where
     P: IntoRawPtr + FromRawPtr + Deref<Target = T>,
 {
-    /// Stores a value into the pointer if the current value is the same as the current value.
+    /// Stores a value into the pointer if the current value is the same as the
+    /// current value.
     ///
-    /// The return value is always the previous value. If it is equal to current, then the value was updated.
+    /// The return value is always the previous value. If it is equal to
+    /// current, then the value was updated.
     ///
-    /// compare_and_swap also takes an Ordering argument which describes the memory ordering of this operation.
+    /// compare_and_swap also takes an Ordering argument which describes the
+    /// memory ordering of this operation.
     pub fn compare_and_swap(
         &self,
         current: Option<&P>,
@@ -169,11 +172,19 @@ where
         }
     }
 
-    /// Stores a value into the pointer if the current value is the same as the `current` value.
+    /// Stores a value into the pointer if the current value is the same as the
+    /// `current` value.
     ///
-    /// The return value is a result indicating whether the new value was written and containing the previous value. On success this value is guaranteed to be equal to `current`.
+    /// The return value is a result indicating whether the new value was
+    /// written and containing the previous value. On success this value is
+    /// guaranteed to be equal to `current`.
     ///
-    /// `compare_exchange` takes two `Ordering` arguments to describe the memory ordering of this operation. The first describes the required ordering if the operation succeeds while the second describes the required ordering when the operation fails. The failure ordering can't be `Release` or `AcqRel` and must be equivalent or weaker than the success ordering.
+    /// `compare_exchange` takes two `Ordering` arguments to describe the
+    /// memory ordering of this operation. The first describes the required
+    /// ordering if the operation succeeds while the second describes the
+    /// required ordering when the operation fails. The failure ordering can't
+    /// be `Release` or `AcqRel` and must be equivalent or weaker than the
+    /// success ordering.
     pub fn compare_exchange(
         &self,
         current: Option<&P>,
@@ -188,11 +199,20 @@ where
             .map_err(|pprev| (unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
     }
 
-    /// Stores a value into the pointer if the current value is the same as the `current` value.
+    /// Stores a value into the pointer if the current value is the same as the
+    /// `current` value.
     ///
-    /// Unlike `compare_exchange`, this function is allowed to spuriously fail even when the comparison succeeds, which can result in more efficient code on some platforms. The return value is a result indicating whether the new value was written and containing the previous value.
+    /// Unlike `compare_exchange`, this function is allowed to spuriously fail
+    /// even when the comparison succeeds, which can result in more efficient
+    /// code on some platforms. The return value is a result indicating whether
+    /// the new value was written and containing the previous value.
     ///
-    /// `compare_exchange_weak` takes two `Ordering` arguments to describe the memory ordering of this operation. The first describes the required ordering if the operation succeeds while the second describes the required ordering when the operation fails. The failure ordering can't be `Release` or `AcqRel` and must be equivalent or weaker than the success ordering.
+    /// `compare_exchange_weak` takes two `Ordering` arguments to describe the
+    /// memory ordering of this operation. The first describes the required
+    /// ordering if the operation succeeds while the second describes the
+    /// required ordering when the operation fails. The failure ordering can't
+    /// be `Release` or `AcqRel` and must be equivalent or weaker than the
+    /// success ordering.
     pub fn compare_exchange_weak(
         &self,
         current: Option<&P>,
