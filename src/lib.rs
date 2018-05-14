@@ -56,7 +56,7 @@ where
     /// Create a new Atomic from Pointer P
     pub fn new(value: P) -> Atom<P> {
         Atom {
-            inner: AtomicPtr::new(unsafe { value.into_raw() }),
+            inner: AtomicPtr::new(value.into_raw()),
             data: PhantomData,
         }
     }
@@ -64,13 +64,9 @@ where
     /// Swap a new value into the Atom, This will try multiple
     /// times until it succeeds. The old value will be returned.
     pub fn swap(&self, v: P, order: Ordering) -> Option<P> {
-        let new = unsafe { v.into_raw() };
+        let new = v.into_raw();
         let old = self.inner.swap(new, order);
-        if !old.is_null() {
-            Some(unsafe { FromRawPtr::from_raw(old) })
-        } else {
-            None
-        }
+        unsafe { Self::inner_from_raw(old) }
     }
 
     /// Take the value of the Atom replacing it with null pointer
@@ -78,11 +74,7 @@ where
     /// result will be `None`.
     pub fn take(&self, order: Ordering) -> Option<P> {
         let old = self.inner.swap(ptr::null_mut(), order);
-        if !old.is_null() {
-            Some(unsafe { FromRawPtr::from_raw(old) })
-        } else {
-            None
-        }
+        unsafe { Self::inner_from_raw(old) }
     }
 
     /// This will do a `CAS` setting the value only if it is NULL
@@ -90,7 +82,7 @@ where
     /// otherwise a `Some(v)` will be returned, where the value was
     /// the same value that you passed into this function
     pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
-        let new = unsafe { v.into_raw() };
+        let new = v.into_raw();
         let old = self.inner.compare_and_swap(ptr::null_mut(), new, order);
         if !old.is_null() {
             Some(unsafe { FromRawPtr::from_raw(new) })
@@ -112,24 +104,18 @@ where
     where
         P: GetNextMut<NextPtr = Option<P>>,
     {
-        unsafe {
-            let next = value.get_next() as *mut Option<P>;
-            let raw = value.into_raw();
-            // Iff next was set to Some(P) we want to
-            // assert that it was droppeds
-            drop(ptr::read(next));
-            loop {
-                let pcurrent = self.inner.load(load_order);
-                let current = if pcurrent.is_null() {
-                    None
-                } else {
-                    Some(FromRawPtr::from_raw(pcurrent))
-                };
-                ptr::write(next, current);
-                let last = self.inner.compare_and_swap(pcurrent, raw, cas_order);
-                if last == pcurrent {
-                    return last.is_null();
-                }
+        let next = value.get_next() as *mut Option<P>;
+        let raw = value.into_raw();
+        // If next was set to Some(P) we want to
+        // assert that it was droppeds
+        unsafe { ptr::drop_in_place(next) };
+        loop {
+            let pcurrent = self.inner.load(load_order);
+            let current = unsafe { Self::inner_from_raw(pcurrent) };
+            unsafe { ptr::write(next, current) };
+            let last = self.inner.compare_and_swap(pcurrent, raw, cas_order);
+            if last == pcurrent {
+                return last.is_null();
             }
         }
     }
@@ -140,6 +126,15 @@ where
     pub fn is_none(&self, order: Ordering) -> bool {
         self.inner.load(order).is_null()
     }
+
+    #[inline]
+    unsafe fn inner_from_raw(ptr: *mut ()) -> Option<P> {
+        if !ptr.is_null() {
+            Some(FromRawPtr::from_raw(ptr))
+        } else {
+            None
+        }
+    }
 }
 
 impl<P> Drop for Atom<P>
@@ -147,12 +142,7 @@ where
     P: IntoRawPtr + FromRawPtr,
 {
     fn drop(&mut self) {
-        unsafe {
-            let ptr = self.inner.load(Ordering::Relaxed);
-            if !ptr.is_null() {
-                let _: P = FromRawPtr::from_raw(ptr);
-            }
-        }
+        self.take(Ordering::Relaxed);
     }
 }
 
@@ -169,7 +159,7 @@ where
 
 /// Convert from into a raw pointer
 pub trait IntoRawPtr {
-    unsafe fn into_raw(self) -> *mut ();
+    fn into_raw(self) -> *mut ();
 }
 
 /// Convert from a raw ptr into a pointer
@@ -179,7 +169,7 @@ pub trait FromRawPtr {
 
 impl<T> IntoRawPtr for Box<T> {
     #[inline]
-    unsafe fn into_raw(self) -> *mut () {
+    fn into_raw(self) -> *mut () {
         Box::into_raw(self) as *mut ()
     }
 }
@@ -193,7 +183,7 @@ impl<T> FromRawPtr for Box<T> {
 
 impl<T> IntoRawPtr for Arc<T> {
     #[inline]
-    unsafe fn into_raw(self) -> *mut () {
+    fn into_raw(self) -> *mut () {
         Arc::into_raw(self) as *mut T as *mut ()
     }
 }
@@ -296,18 +286,14 @@ where
     /// If the Atom is set, get the value
     pub fn get<'a>(&'a self, order: Ordering) -> Option<&'a T> {
         let ptr = self.inner.inner.load(order);
-        if ptr.is_null() {
-            None
-        } else {
-            unsafe {
-                // This is safe since ptr cannot be changed once it is set
-                // which means that this is now a Arc or a Box.
-                let v: P = FromRawPtr::from_raw(ptr);
-                let out = copy_lifetime(self, &*v);
-                mem::forget(v);
-                Some(out)
-            }
-        }
+        let val = unsafe { Atom::inner_from_raw(ptr) };
+        val.map(|v: P| {
+            // This is safe since ptr cannot be changed once it is set
+            // which means that this is now a Arc or a Box.
+            let out = unsafe { copy_lifetime(self, &*v) };
+            mem::forget(v);
+            out
+        })
     }
 }
 
@@ -315,18 +301,14 @@ impl<T> AtomSetOnce<Box<T>> {
     /// If the Atom is set, get the value
     pub fn get_mut<'a>(&'a mut self, order: Ordering) -> Option<&'a mut T> {
         let ptr = self.inner.inner.load(order);
-        if ptr.is_null() {
-            None
-        } else {
-            unsafe {
-                // This is safe since ptr cannot be changed once it is set
-                // which means that this is now a Arc or a Box.
-                let mut v: Box<T> = FromRawPtr::from_raw(ptr);
-                let out = copy_mut_lifetime(self, &mut *v);
-                mem::forget(v);
-                Some(out)
-            }
-        }
+        let val = unsafe { Atom::inner_from_raw(ptr) };
+        val.map(move |mut v: Box<T>| {
+            // This is safe since ptr cannot be changed once it is set
+            // which means that this is now a Arc or a Box.
+            let out = unsafe { copy_mut_lifetime(self, &mut *v) };
+            mem::forget(v);
+            out
+        })
     }
 }
 
@@ -337,18 +319,12 @@ where
     /// Duplicate the inner pointer if it is set
     pub fn dup<'a>(&self, order: Ordering) -> Option<T> {
         let ptr = self.inner.inner.load(order);
-        if ptr.is_null() {
-            None
-        } else {
-            unsafe {
-                // This is safe since ptr cannot be changed once it is set
-                // which means that this is now a Arc or a Box.
-                let v: T = FromRawPtr::from_raw(ptr);
-                let out = v.clone();
-                mem::forget(v);
-                Some(out)
-            }
-        }
+        let val = unsafe { Atom::inner_from_raw(ptr) };
+        val.map(|v: T| {
+            let out = v.clone();
+            mem::forget(v);
+            out
+        })
     }
 }
 
