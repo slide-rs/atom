@@ -1,28 +1,28 @@
 Atom
 ====
 
-[![Build Status](https://travis-ci.org/slide-rs/atom.svg?branch=master)](https://travis-ci.org/csherratt/atom)
+[![Build Status](https://travis-ci.org/slide-rs/atom.svg?branch=master)](https://travis-ci.org/slide-rs/atom)
 [![Atom](http://meritbadge.herokuapp.com/atom)](https://crates.io/crates/atom)
 
 `Atom` is a simple abstraction around Rust's `AtomicPtr`. It provides a simple, wait-free way to exchange
 data between threads safely. `Atom` is built around the principle that an atomic swap can be used to
 safely emulate Rust's ownership.
 
-![store](https://raw.githubusercontent.com/csherratt/atom/master/.store.png)
+![store](https://raw.githubusercontent.com/slide-rs/atom/master/.store.png)
 
 Using [`store`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicPtr.html#method.store) to set a shared
 atomic pointer is unsafe in rust (or any language) because the contents of the pointer can be overwritten at any
 point in time causing the contents of the pointer to be lost. This can cause your system to leak memory, and
 if you are expecting that memory to do something useful (like wake a sleeping thread), you are in trouble.
 
-![load](https://raw.githubusercontent.com/csherratt/atom/master/.load.png)
+![load](https://raw.githubusercontent.com/slide-rs/atom/master/.load.png)
 
 Similarly, [`load`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicPtr.html#method.store) 
 is unsafe since there is no guarantee that that pointer will live for even a cycle after you have read it. Another
 thread may modify the pointer, or free it. For `load` to be safe you need to have some outside contract to preserve
 the correct ownership semantics.
 
-![swap](https://raw.githubusercontent.com/csherratt/atom/master/.swap.png)
+![swap](https://raw.githubusercontent.com/slide-rs/atom/master/.swap.png)
 
 A [`swap`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicPtr.html#method.swap) is special as it allows
 a reference to be exchanged without the risk of that pointer being freed, or stomped on. When a thread
