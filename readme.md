@@ -8,27 +8,26 @@ Atom
 data between threads safely. `Atom` is built around the principle that an atomic swap can be used to
 safely emulate Rust's ownership.
 
-![store](https://raw.githubusercontent.com/slide-rs/atom/master/assets/store.png)
+![store](assets/store.png)
 
 Using [`store`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicPtr.html#method.store) to set a shared
 atomic pointer is unsafe in rust (or any language) because the contents of the pointer can be overwritten at any
 point in time causing the contents of the pointer to be lost. This can cause your system to leak memory, and
 if you are expecting that memory to do something useful (like wake a sleeping thread), you are in trouble.
 
-![load](https://raw.githubusercontent.com/slide-rs/atom/master/assets/load.png)
+![load](assets/load.png)
 
 Similarly, [`load`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicPtr.html#method.store) 
 is unsafe since there is no guarantee that that pointer will live for even a cycle after you have read it. Another
 thread may modify the pointer, or free it. For `load` to be safe you need to have some outside contract to preserve
 the correct ownership semantics.
 
-![swap](https://raw.githubusercontent.com/slide-rs/atom/master/assets/swap.png)
+![swap](assets/swap.png)
 
 A [`swap`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicPtr.html#method.swap) is special as it allows
 a reference to be exchanged without the risk of that pointer being freed, or stomped on. When a thread
 swaps an `AtomicPtr` the old pointer ownership is moved to the caller, and the `AtomicPtr` takes ownership of the new
 pointer.
-
 
 Using `Atom`
 ------------
