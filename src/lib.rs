@@ -213,13 +213,14 @@ impl<'a, T> FromRawPtr for &'a T {
 /// Transforms lifetime of the second pointer to match the first.
 #[inline]
 unsafe fn copy_lifetime<'a, S: ?Sized, T: ?Sized + 'a>(_ptr: &'a S, ptr: &T) -> &'a T {
-    mem::transmute(ptr)
+    &*(ptr as *const T)
 }
 
 /// Transforms lifetime of the second pointer to match the first.
 #[inline]
+#[allow(unknown_lints, mut_from_ref)]
 unsafe fn copy_mut_lifetime<'a, S: ?Sized, T: ?Sized + 'a>(_ptr: &'a S, ptr: &mut T) -> &'a mut T {
-    mem::transmute(ptr)
+    &mut *(ptr as *mut T)
 }
 
 /// This is a restricted version of the Atom. It allows for only
@@ -284,7 +285,7 @@ where
     P: IntoRawPtr + FromRawPtr + Deref<Target = T>,
 {
     /// If the Atom is set, get the value
-    pub fn get<'a>(&'a self, order: Ordering) -> Option<&'a T> {
+    pub fn get(&self, order: Ordering) -> Option<&T> {
         let ptr = self.inner.inner.load(order);
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(|v: P| {
@@ -299,7 +300,7 @@ where
 
 impl<T> AtomSetOnce<Box<T>> {
     /// If the Atom is set, get the value
-    pub fn get_mut<'a>(&'a mut self, order: Ordering) -> Option<&'a mut T> {
+    pub fn get_mut(&mut self, order: Ordering) -> Option<&mut T> {
         let ptr = self.inner.inner.load(order);
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(move |mut v: Box<T>| {
@@ -317,7 +318,7 @@ where
     T: Clone + IntoRawPtr + FromRawPtr,
 {
     /// Duplicate the inner pointer if it is set
-    pub fn dup<'a>(&self, order: Ordering) -> Option<T> {
+    pub fn dup(&self, order: Ordering) -> Option<T> {
         let ptr = self.inner.inner.load(order);
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(|v: T| {

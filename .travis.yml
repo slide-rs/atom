@@ -1,4 +1,8 @@
 language: rust
+rust:
+  - stable
+  - beta
+  - nightly
 
 env:
   global:
@@ -13,5 +17,16 @@ after_script:
   - mv target/doc doc
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
 
-
-
+cache: cargo
+matrix:
+  fast_finish: true
+  include:
+    - rust: nightly-2018-05-06
+      env: # use env so updating versions causes cache invalidation
+        - CLIPPY_VERSION=0.0.197
+      before_script:
+        - rustup component add rustfmt-preview
+        - cargo install clippy --version $CLIPPY_VERSION || echo "clippy already installed"
+      script:
+        - cargo fmt -- --write-mode=check
+        - cargo clippy
