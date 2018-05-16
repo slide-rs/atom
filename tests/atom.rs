@@ -47,28 +47,76 @@ fn set_if_none() {
 }
 
 #[test]
-fn compare_and_swap() {
-    cas_test_helper(|a, cas_val, next_val| a.compare_and_swap(cas_val, next_val, Ordering::SeqCst));
+fn compare_and_swap_basics() {
+    cas_test_basics_helper(|a, cas_val, next_val| {
+        a.compare_and_swap(cas_val, next_val, Ordering::SeqCst)
+    });
 }
 
 #[test]
-fn compare_exchange() {
-    cas_test_helper(|a, cas_val, next_val| {
+fn compare_exchange_basics() {
+    cas_test_basics_helper(|a, cas_val, next_val| {
         a.compare_exchange(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
     });
 }
 
 #[test]
-fn compare_exchange_weak() {
-    cas_test_helper(|a, cas_val, next_val| {
+fn compare_exchange_weak_basics() {
+    cas_test_basics_helper(|a, cas_val, next_val| {
         a.compare_exchange_weak(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
     });
 }
 
-fn cas_test_helper(
-    cas: fn(&Atom<Arc<String>>, Option<&Arc<String>>, Option<Arc<String>>)
-        -> Result<Option<Arc<String>>, (Option<Arc<String>>, *mut Arc<String>)>,
-) {
+#[test]
+fn compare_and_swap_threads() {
+    cas_test_threads_helper(|a, cas_val, next_val| {
+        a.compare_and_swap(cas_val, next_val, Ordering::SeqCst)
+    });
+}
+
+#[test]
+fn compare_exchange_threads() {
+    cas_test_threads_helper(|a, cas_val, next_val| {
+        a.compare_exchange(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+    });
+}
+
+#[test]
+fn compare_exchange_weak_threads() {
+    cas_test_threads_helper(|a, cas_val, next_val| {
+        a.compare_exchange_weak(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+    });
+}
+
+type TestCASFn = fn(&Atom<Arc<String>>, Option<&Arc<String>>, Option<Arc<String>>)
+    -> Result<Option<Arc<String>>, (Option<Arc<String>>, *mut Arc<String>)>;
+
+fn cas_test_basics_helper(cas: TestCASFn) {
+    let cur_val = Arc::new("123".to_owned());
+    let mut next_val = Arc::new("456".to_owned());
+    let other_val = Arc::new("1927447".to_owned());
+
+    let a = Atom::new(cur_val.clone());
+
+    let pcur = IntoRawPtr::into_raw(cur_val.clone());
+    let pnext = IntoRawPtr::into_raw(next_val.clone());
+
+    for attempt in vec![None, Some(&other_val), Some(&Arc::new("wow".to_owned()))] {
+        let res = cas(&a, attempt, Some(next_val.clone())).unwrap_err();
+        next_val = res.0.unwrap();
+        assert_eq!(res.1, pcur as *mut _);
+    }
+
+    let res = cas(&a, Some(&cur_val), Some(next_val.clone()));
+    assert_eq!(res, Ok(Some(cur_val)));
+
+    for attempt in vec![None, Some(&other_val), Some(&Arc::new("wow".to_owned()))] {
+        let res = cas(&a, attempt, None).unwrap_err();
+        assert_eq!(res, (None, pnext as *mut _));
+    }
+}
+
+fn cas_test_threads_helper(cas: TestCASFn) {
     let cur_val = Arc::new("current".to_owned());
     let next_val = Arc::new("next".to_owned());
     let other_val = Arc::new("other".to_owned());
