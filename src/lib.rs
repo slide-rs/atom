@@ -148,14 +148,16 @@ impl<P, T> Atom<P>
 where
     P: IntoRawPtr + FromRawPtr + Deref<Target = T>,
 {
-    /// Stores a value into the pointer if the current value is the same as the
-    /// current value.
+    /// Stores `new` in the Atom if `current` has the same raw pointer
+    /// representation as the currently stored value.
     ///
-    /// The return value is always the previous value. If it is equal to
-    /// current, then the value was updated.
+    /// On success, the Atom's previous value is returned. On failure, `new` is
+    /// returned together with a raw pointer to the Atom's current unchanged
+    /// value, which is **not safe to dereference**, especially if the Atom is
+    /// accessed from multiple threads.
     ///
-    /// compare_and_swap also takes an Ordering argument which describes the
-    /// memory ordering of this operation.
+    /// `compare_and_swap` also takes an `Ordering` argument which describes
+    /// the memory ordering of this operation.
     pub fn compare_and_swap(
         &self,
         current: Option<&P>,
