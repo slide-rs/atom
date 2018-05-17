@@ -91,35 +91,6 @@ where
         }
     }
 
-    /// Take the current content, write it into P then do a CAS to extent this
-    /// Atom with the previous contents. This can be used to create a LIFO
-    ///
-    /// Returns true if this set this migrated the Atom from null.
-    pub fn replace_and_set_next(
-        &self,
-        mut value: P,
-        load_order: Ordering,
-        cas_order: Ordering,
-    ) -> bool
-    where
-        P: GetNextMut<NextPtr = Option<P>>,
-    {
-        let next = value.get_next() as *mut Option<P>;
-        let raw = value.into_raw();
-        // If next was set to Some(P) we want to
-        // assert that it was droppeds
-        unsafe { ptr::drop_in_place(next) };
-        loop {
-            let pcurrent = self.inner.load(load_order);
-            let current = unsafe { Self::inner_from_raw(pcurrent) };
-            unsafe { ptr::write(next, current) };
-            let last = self.inner.compare_and_swap(pcurrent, raw, cas_order);
-            if last == pcurrent {
-                return last.is_null();
-            }
-        }
-    }
-
     /// Check to see if an atom is None
     ///
     /// This only means that the contents was None when it was measured
@@ -429,11 +400,4 @@ where
             out
         })
     }
-}
-
-/// This is a utility Trait that fetches the next ptr from
-/// an object.
-pub trait GetNextMut {
-    type NextPtr;
-    fn get_next(&mut self) -> &mut Self::NextPtr;
 }
