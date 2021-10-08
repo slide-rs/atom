@@ -63,17 +63,17 @@ where
 
     /// Swap a new value into the Atom, This will try multiple
     /// times until it succeeds. The old value will be returned.
-    pub fn swap(&self, v: P, order: Ordering) -> Option<P> {
+    pub fn swap(&self, v: P) -> Option<P> {
         let new = v.into_raw();
-        let old = self.inner.swap(new, order);
+        let old = self.inner.swap(new, Ordering::AcqRel);
         unsafe { Self::inner_from_raw(old) }
     }
 
     /// Take the value of the Atom replacing it with null pointer
     /// Returning the contents. If the contents was a `null` pointer the
     /// result will be `None`.
-    pub fn take(&self, order: Ordering) -> Option<P> {
-        let old = self.inner.swap(ptr::null_mut(), order);
+    pub fn take(&self) -> Option<P> {
+        let old = self.inner.swap(ptr::null_mut(), Ordering::AcqRel);
         unsafe { Self::inner_from_raw(old) }
     }
 
@@ -81,10 +81,10 @@ where
     /// this will return `None` if the value was written,
     /// otherwise a `Some(v)` will be returned, where the value was
     /// the same value that you passed into this function
-    pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
+    pub fn set_if_none(&self, v: P) -> Option<P> {
         let new = v.into_raw();
-        let old = self.inner.compare_and_swap(ptr::null_mut(), new, order);
-        if !old.is_null() {
+        let result = self.inner.compare_exchange(ptr::null_mut(), new, Ordering::AcqRel, Ordering::Acquire);
+        if result.is_err() {
             Some(unsafe { FromRawPtr::from_raw(new) })
         } else {
             None
@@ -98,8 +98,6 @@ where
     pub fn replace_and_set_next(
         &self,
         mut value: P,
-        load_order: Ordering,
-        cas_order: Ordering,
     ) -> bool
     where
         P: GetNextMut<NextPtr = Option<P>>,
@@ -110,12 +108,13 @@ where
         // assert that it was droppeds
         unsafe { ptr::drop_in_place(next) };
         loop {
-            let pcurrent = self.inner.load(load_order);
+            let pcurrent = self.inner.load(Ordering::Acquire);
             let current = unsafe { Self::inner_from_raw(pcurrent) };
             unsafe { ptr::write(next, current) };
-            let last = self.inner.compare_and_swap(pcurrent, raw, cas_order);
-            if last == pcurrent {
-                return last.is_null();
+            let result = self.inner.compare_exchange(pcurrent, raw, Ordering::AcqRel, Ordering::Acquire);
+            match result {
+                Ok(replaced_ptr) => return replaced_ptr.is_null(),
+                _ => {}
             }
         }
     }
@@ -163,15 +162,13 @@ where
         &self,
         current: Option<&P>,
         new: Option<P>,
-        order: Ordering,
     ) -> Result<Option<P>, (Option<P>, *mut P)> {
         let pcurrent = Self::inner_as_ptr(current);
         let pnew = Self::inner_into_raw(new);
-        let pprev = self.inner.compare_and_swap(pcurrent, pnew, order);
-        if pprev == pcurrent {
-            Ok(unsafe { Self::inner_from_raw(pprev) })
-        } else {
-            Err((unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
+        let pprev = self.inner.compare_exchange(pcurrent, pnew, Ordering::AcqRel, Ordering::Acquire);
+        match pprev {
+            Ok(pprev) => Ok(unsafe { Self::inner_from_raw(pprev) }),
+            Err(pprev) => Err((unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
         }
     }
 
@@ -192,12 +189,10 @@ where
         &self,
         current: Option<&P>,
         new: Option<P>,
-        success: Ordering,
-        failure: Ordering,
     ) -> Result<Option<P>, (Option<P>, *mut P)> {
         let pnew = Self::inner_into_raw(new);
         self.inner
-            .compare_exchange(Self::inner_as_ptr(current), pnew, success, failure)
+            .compare_exchange(Self::inner_as_ptr(current), pnew, Ordering::AcqRel, Ordering::Acquire)
             .map(|pprev| unsafe { Self::inner_from_raw(pprev) })
             .map_err(|pprev| (unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
     }
@@ -220,12 +215,10 @@ where
         &self,
         current: Option<&P>,
         new: Option<P>,
-        success: Ordering,
-        failure: Ordering,
     ) -> Result<Option<P>, (Option<P>, *mut P)> {
         let pnew = Self::inner_into_raw(new);
         self.inner
-            .compare_exchange_weak(Self::inner_as_ptr(current), pnew, success, failure)
+            .compare_exchange_weak(Self::inner_as_ptr(current), pnew, Ordering::AcqRel, Ordering::Acquire)
             .map(|pprev| unsafe { Self::inner_from_raw(pprev) })
             .map_err(|pprev| (unsafe { Self::inner_from_raw(pnew) }, pprev as *mut P))
     }
@@ -244,7 +237,7 @@ where
     P: IntoRawPtr + FromRawPtr,
 {
     fn drop(&mut self) {
-        self.take(Ordering::Relaxed);
+        self.take();
     }
 }
 
@@ -360,8 +353,8 @@ where
     /// this will return `OK(())` if the value was written,
     /// otherwise a `Err(P)` will be returned, where the value was
     /// the same value that you passed into this function
-    pub fn set_if_none(&self, v: P, order: Ordering) -> Option<P> {
-        self.inner.set_if_none(v, order)
+    pub fn set_if_none(&self, v: P) -> Option<P> {
+        self.inner.set_if_none(v)
     }
 
     /// Convert an `AtomSetOnce` into an `Atom`
@@ -387,8 +380,8 @@ where
     P: IntoRawPtr + FromRawPtr + Deref<Target = T>,
 {
     /// If the Atom is set, get the value
-    pub fn get(&self, order: Ordering) -> Option<&T> {
-        let ptr = self.inner.inner.load(order);
+    pub fn get(&self) -> Option<&T> {
+        let ptr = self.inner.inner.load(Ordering::Acquire);
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(|v: P| {
             // This is safe since ptr cannot be changed once it is set
@@ -402,8 +395,8 @@ where
 
 impl<T> AtomSetOnce<Box<T>> {
     /// If the Atom is set, get the value
-    pub fn get_mut(&mut self, order: Ordering) -> Option<&mut T> {
-        let ptr = self.inner.inner.load(order);
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        let ptr = self.inner.inner.load(Ordering::Acquire);
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(move |mut v: Box<T>| {
             // This is safe since ptr cannot be changed once it is set
@@ -420,8 +413,8 @@ where
     T: Clone + IntoRawPtr + FromRawPtr,
 {
     /// Duplicate the inner pointer if it is set
-    pub fn dup(&self, order: Ordering) -> Option<T> {
-        let ptr = self.inner.inner.load(order);
+    pub fn dup(&self) -> Option<T> {
+        let ptr = self.inner.inner.load(Ordering::Acquire);
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(|v: T| {
             let out = v.clone();
