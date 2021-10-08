@@ -24,6 +24,21 @@ use std::sync::Arc;
 
 /// An Atom wraps an AtomicPtr, it allows for safe mutation of an atomic
 /// into common Rust Types.
+///
+/// All `Ordering` is `AcqRel`.
+///
+/// ```
+/// // Create an empty atom
+/// use std::sync::Arc;
+/// use atom::Atom;
+///
+/// let shared_atom = Arc::new(Atom::empty());
+///
+/// shared_atom.set_if_none(Box::new(42));
+/// let old_value = shared_atom.swap(Box::new(75));
+///
+/// assert_eq!(old_value, Some(Box::new(42)));
+/// ```
 pub struct Atom<P>
 where
     P: IntoRawPtr + FromRawPtr,
@@ -155,9 +170,6 @@ where
     /// returned together with a raw pointer to the Atom's current unchanged
     /// value, which is **not safe to dereference**, especially if the Atom is
     /// accessed from multiple threads.
-    ///
-    /// `compare_and_swap` also takes an `Ordering` argument which describes
-    /// the memory ordering of this operation.
     pub fn compare_and_swap(
         &self,
         current: Option<&P>,
@@ -178,13 +190,6 @@ where
     /// The return value is a result indicating whether the new value was
     /// written and containing the previous value. On success this value is
     /// guaranteed to be equal to `current`.
-    ///
-    /// `compare_exchange` takes two `Ordering` arguments to describe the
-    /// memory ordering of this operation. The first describes the required
-    /// ordering if the operation succeeds while the second describes the
-    /// required ordering when the operation fails. The failure ordering can't
-    /// be `Release` or `AcqRel` and must be equivalent or weaker than the
-    /// success ordering.
     pub fn compare_exchange(
         &self,
         current: Option<&P>,
@@ -204,13 +209,6 @@ where
     /// even when the comparison succeeds, which can result in more efficient
     /// code on some platforms. The return value is a result indicating whether
     /// the new value was written and containing the previous value.
-    ///
-    /// `compare_exchange_weak` takes two `Ordering` arguments to describe the
-    /// memory ordering of this operation. The first describes the required
-    /// ordering if the operation succeeds while the second describes the
-    /// required ordering when the operation fails. The failure ordering can't
-    /// be `Release` or `AcqRel` and must be equivalent or weaker than the
-    /// success ordering.
     pub fn compare_exchange_weak(
         &self,
         current: Option<&P>,
