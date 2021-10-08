@@ -1,9 +1,6 @@
 Atom
 ====
 
-[![Build Status](https://travis-ci.org/slide-rs/atom.svg?branch=master)](https://travis-ci.org/slide-rs/atom)
-[![Atom](http://meritbadge.herokuapp.com/atom)](https://crates.io/crates/atom)
-
 `Atom` is a simple abstraction around Rust's `AtomicPtr`. It provides a simple, wait-free way to exchange
 data between threads safely. `Atom` is built around the principle that an atomic swap can be used to
 safely emulate Rust's ownership.
