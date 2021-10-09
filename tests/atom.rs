@@ -24,24 +24,24 @@ use std::thread;
 #[test]
 fn swap() {
     let a = Atom::empty();
-    assert_eq!(a.swap(Box::new(1u8), Ordering::AcqRel), None);
-    assert_eq!(a.swap(Box::new(2u8), Ordering::AcqRel), Some(Box::new(1u8)));
-    assert_eq!(a.swap(Box::new(3u8), Ordering::AcqRel), Some(Box::new(2u8)));
+    assert_eq!(a.swap(Box::new(1u8)), None);
+    assert_eq!(a.swap(Box::new(2u8)), Some(Box::new(1u8)));
+    assert_eq!(a.swap(Box::new(3u8)), Some(Box::new(2u8)));
 }
 
 #[test]
 fn take() {
     let a = Atom::new(Box::new(7u8));
-    assert_eq!(a.take(Ordering::Acquire), Some(Box::new(7)));
-    assert_eq!(a.take(Ordering::Acquire), None);
+    assert_eq!(a.take(), Some(Box::new(7)));
+    assert_eq!(a.take(), None);
 }
 
 #[test]
 fn set_if_none() {
     let a = Atom::empty();
-    assert_eq!(a.set_if_none(Box::new(7u8), Ordering::Release), None);
+    assert_eq!(a.set_if_none(Box::new(7u8)), None);
     assert_eq!(
-        a.set_if_none(Box::new(8u8), Ordering::Release),
+        a.set_if_none(Box::new(8u8)),
         Some(Box::new(8u8))
     );
 }
@@ -49,42 +49,42 @@ fn set_if_none() {
 #[test]
 fn compare_and_swap_basics() {
     cas_test_basics_helper(|a, cas_val, next_val| {
-        a.compare_and_swap(cas_val, next_val, Ordering::SeqCst)
+        a.compare_and_swap(cas_val, next_val)
     });
 }
 
 #[test]
 fn compare_exchange_basics() {
     cas_test_basics_helper(|a, cas_val, next_val| {
-        a.compare_exchange(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+        a.compare_exchange(cas_val, next_val)
     });
 }
 
 #[test]
 fn compare_exchange_weak_basics() {
     cas_test_basics_helper(|a, cas_val, next_val| {
-        a.compare_exchange_weak(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+        a.compare_exchange_weak(cas_val, next_val)
     });
 }
 
 #[test]
 fn compare_and_swap_threads() {
     cas_test_threads_helper(|a, cas_val, next_val| {
-        a.compare_and_swap(cas_val, next_val, Ordering::SeqCst)
+        a.compare_and_swap(cas_val, next_val)
     });
 }
 
 #[test]
 fn compare_exchange_threads() {
     cas_test_threads_helper(|a, cas_val, next_val| {
-        a.compare_exchange(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+        a.compare_exchange(cas_val, next_val)
     });
 }
 
 #[test]
 fn compare_exchange_weak_threads() {
     cas_test_threads_helper(|a, cas_val, next_val| {
-        a.compare_exchange_weak(cas_val, next_val, Ordering::SeqCst, Ordering::SeqCst)
+        a.compare_exchange_weak(cas_val, next_val)
     });
 }
 
@@ -157,7 +157,7 @@ fn cas_test_threads_helper(cas: TestCASFn) {
         .collect();
     assert!(uniq_pprevs.contains(&cur_val.into_raw()));
     assert!(!uniq_pprevs.contains(&other_val.into_raw()));
-    assert_eq!(a.take(Ordering::Relaxed), Some(next_val));
+    assert_eq!(a.take(), Some(next_val));
 }
 
 #[derive(Clone)]
@@ -197,34 +197,34 @@ fn ensure_send() {
     let w = wait.clone();
     let a = atom.clone();
     thread::spawn(move || {
-        a.swap(Box::new(7u8), Ordering::AcqRel);
+        a.swap(Box::new(7u8));
         w.wait();
     });
 
     wait.wait();
-    assert_eq!(atom.take(Ordering::Acquire), Some(Box::new(7u8)));
+    assert_eq!(atom.take(), Some(Box::new(7u8)));
 }
 
 #[test]
 fn get() {
     let atom = Arc::new(AtomSetOnce::empty());
-    assert_eq!(atom.get(Ordering::Acquire), None);
-    assert_eq!(atom.set_if_none(Box::new(8u8), Ordering::Release), None);
-    assert_eq!(atom.get(Ordering::Acquire), Some(&8u8));
+    assert_eq!(atom.get(), None);
+    assert_eq!(atom.set_if_none(Box::new(8u8)), None);
+    assert_eq!(atom.get(), Some(&8u8));
 }
 
 #[test]
 fn get_arc() {
     let atom = Arc::new(AtomSetOnce::empty());
-    assert_eq!(atom.get(Ordering::Acquire), None);
-    assert_eq!(atom.set_if_none(Arc::new(8u8), Ordering::Release), None);
-    assert_eq!(atom.get(Ordering::Acquire), Some(&8u8));
+    assert_eq!(atom.get(), None);
+    assert_eq!(atom.set_if_none(Arc::new(8u8)), None);
+    assert_eq!(atom.get(), Some(&8u8));
 
     let v = Arc::new(AtomicUsize::new(0));
     let atom = Arc::new(AtomSetOnce::empty());
-    atom.get(Ordering::Acquire);
-    atom.set_if_none(Arc::new(Canary(v.clone())), Ordering::Release);
-    atom.get(Ordering::Acquire);
+    atom.get();
+    atom.set_if_none(Arc::new(Canary(v.clone())));
+    atom.get();
     drop(atom);
 
     assert_eq!(v.load(Ordering::SeqCst), 1);
@@ -256,13 +256,13 @@ impl GetNextMut for Box<Link> {
 fn lifo() {
     let atom = Atom::empty();
     for i in 0..100 {
-        let x = atom.replace_and_set_next(Link::new(99 - i), Ordering::Relaxed, Ordering::AcqRel);
+        let x = atom.replace_and_set_next(Link::new(99 - i));
         assert_eq!(x, i == 0);
     }
 
     let expected: Vec<u32> = (0..100).collect();
     let mut found = Vec::new();
-    let mut chain = atom.take(Ordering::Acquire);
+    let mut chain = atom.take();
     while let Some(v) = chain {
         found.push(v.value);
         chain = v.next;
@@ -300,7 +300,7 @@ fn lifo_drop() {
     link.next = Some(LinkCanary::new(canary.clone()));
 
     let atom = Atom::empty();
-    atom.replace_and_set_next(link, Ordering::Relaxed, Ordering::AcqRel);
+    atom.replace_and_set_next(link);
     assert_eq!(1, v.load(Ordering::SeqCst));
     drop(atom);
     assert_eq!(2, v.load(Ordering::SeqCst));
@@ -309,6 +309,6 @@ fn lifo_drop() {
 #[test]
 fn borrow() {
     let a = Atom::new(&5);
-    assert_eq!(a.swap(&7, Ordering::Relaxed), Some(&5));
-    assert_eq!(a.take(Ordering::Relaxed), Some(&7));
+    assert_eq!(a.swap(&7), Some(&5));
+    assert_eq!(a.take(), Some(&7));
 }
