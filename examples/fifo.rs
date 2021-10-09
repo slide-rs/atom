@@ -16,7 +16,7 @@ extern crate atom;
 
 use atom::*;
 use std::mem;
-use std::sync::{ Arc, Barrier};
+use std::sync::{Arc, Barrier};
 use std::thread;
 
 const THREADS: usize = 100;

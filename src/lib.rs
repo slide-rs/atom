@@ -25,7 +25,10 @@ use std::sync::Arc;
 /// An Atom wraps an AtomicPtr, it allows for safe mutation of an atomic
 /// into common Rust Types.
 ///
-/// All `Ordering` is `AcqRel`.
+/// All methods of this type perform [acquire-release synchronization][1] as
+/// necessary to ensure that the referenced object can be accessed safely.
+///
+/// [1]: https://en.cppreference.com/w/cpp/atomic/memory_order#Release-Acquire_ordering
 ///
 /// ```
 /// // Create an empty atom
@@ -88,7 +91,7 @@ where
     /// Returning the contents. If the contents was a `null` pointer the
     /// result will be `None`.
     pub fn take(&self) -> Option<P> {
-        let old = self.inner.swap(ptr::null_mut(), Ordering::AcqRel);
+        let old = self.inner.swap(ptr::null_mut(), Ordering::Acquire);
         unsafe { Self::inner_from_raw(old) }
     }
 
@@ -98,7 +101,7 @@ where
     /// the same value that you passed into this function
     pub fn set_if_none(&self, v: P) -> Option<P> {
         let new = v.into_raw();
-        let result = self.inner.compare_exchange(ptr::null_mut(), new, Ordering::AcqRel, Ordering::Acquire);
+        let result = self.inner.compare_exchange(ptr::null_mut(), new, Ordering::Release, Ordering::Relaxed);
         if result.is_err() {
             Some(unsafe { FromRawPtr::from_raw(new) })
         } else {
@@ -126,7 +129,7 @@ where
             let pcurrent = self.inner.load(Ordering::Acquire);
             let current = unsafe { Self::inner_from_raw(pcurrent) };
             unsafe { ptr::write(next, current) };
-            let result = self.inner.compare_exchange(pcurrent, raw, Ordering::AcqRel, Ordering::Acquire);
+            let result = self.inner.compare_exchange(pcurrent, raw, Ordering::Release, Ordering::Relaxed);
             match result {
                 Ok(replaced_ptr) => return replaced_ptr.is_null(),
                 _ => {}
@@ -394,7 +397,7 @@ where
 impl<T> AtomSetOnce<Box<T>> {
     /// If the Atom is set, get the value
     pub fn get_mut(&mut self) -> Option<&mut T> {
-        let ptr = self.inner.inner.load(Ordering::Acquire);
+        let ptr = *self.inner.inner.get_mut();
         let val = unsafe { Atom::inner_from_raw(ptr) };
         val.map(move |mut v: Box<T>| {
             // This is safe since ptr cannot be changed once it is set
